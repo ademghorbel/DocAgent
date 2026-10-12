@@ -84,6 +84,25 @@ def main():
     picked = picked[: args.n]
     picked_docs = sorted({r["doc_id"] for r in picked})
 
+    # Download first. A few PDFs in the dataset repo fail Hugging Face's size check; retry once,
+    # then drop that document and its questions rather than crash the whole preparation.
+    pdf_dir = CFG.pdf_dir / COLLECTION
+    local_pdfs: dict[str, Path] = {}
+    for d in picked_docs:
+        for force in (False, True):
+            try:
+                local_pdfs[d] = Path(hf_hub_download(REPO, f"documents/{d}", repo_type="dataset",
+                                                     local_dir=pdf_dir, force_download=force))
+                break
+            except OSError as e:
+                if force:
+                    print(f"  SKIP {d}: download failed twice ({str(e).splitlines()[0]})")
+    dropped = [r for r in picked if r["doc_id"] not in local_pdfs]
+    picked = [r for r in picked if r["doc_id"] in local_pdfs]
+    picked_docs = sorted(local_pdfs)
+    if dropped:
+        print(f"  Dropped {len(dropped)} questions whose PDF could not be downloaded")
+
     questions = []
     for i, r in enumerate(picked):
         pages = [int(p) for p in _as_list(r["evidence_pages"])]
@@ -106,12 +125,10 @@ def main():
 
     store = PageStore(CFG.pages_dir, COLLECTION)
     store.root.mkdir(parents=True, exist_ok=True)
-    pdf_dir = CFG.pdf_dir / COLLECTION
     for d in picked_docs:
-        local = hf_hub_download(REPO, f"documents/{d}", repo_type="dataset", local_dir=pdf_dir)
-        s = ingest_pdf(Path(local), store, doc_id=d)
+        s = ingest_pdf(local_pdfs[d], store, doc_id=d)
+        store.save()  # save after each document so a crash never loses finished work
         print(f"  {d}: {s['pages']} pages")
-    store.save()
     print(f"Page store: {len(store)} pages in {store.root}")
 
 

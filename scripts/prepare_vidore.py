@@ -100,6 +100,9 @@ def main():
             r["image"].convert("RGB").save(store.root / img_rel, quality=90)
         text = (r["markdown"] or "").strip()
         store.add(Page(COLLECTION, doc_id, page, img_rel, text, scanned=len(text) < CFG.min_text_chars))
+        if len(store) % 500 == 0:  # checkpoint: a rerun skips pages already saved
+            store.save()
+            print(f"  {len(store)} pages saved")
     store.save()
     print(f"Page store: {len(store)} pages over {len(store.doc_ids())} documents in {store.root}")
 

@@ -15,6 +15,10 @@ import pymupdf
 from .config import CFG
 from .data import Page, PageStore, safe_name
 
+# Many real PDFs have small defects (e.g. "could not parse color space"). MuPDF still renders the
+# page fine but prints a line per defect; hide that noise so real errors stay visible.
+pymupdf.TOOLS.mupdf_display_errors(False)
+
 
 def ocr_page(png_path: Path) -> str:
     """Optional OCR for scanned pages (B1 only). Needs `pip install pytesseract` + the tesseract binary."""
