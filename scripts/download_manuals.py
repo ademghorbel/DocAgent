@@ -75,7 +75,10 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     if args.from_dir:
-        for pdf in sorted(args.from_dir.rglob("*.pdf")):
+        found = sorted(args.from_dir.rglob("*.pdf"))
+        if not found:
+            sys.exit(f"No PDFs found under {args.from_dir}. Run `!find /kaggle/input -name '*.pdf'` to see where they are.")
+        for pdf in found:
             shutil.copy(pdf, out / pdf.name)
             print(f"added {pdf.name} (uploaded by hand)")
 

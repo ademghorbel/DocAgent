@@ -44,10 +44,24 @@ def run_b2(q: Question, store: PageStore, vlm: VLM, n_pages: int = CFG.direct_vl
     # (ViDoRe) are skipped rather than handed the gold document, which would leak the answer location.
     if len(q.doc_ids) != 1:
         return _record("B2_direct_vlm", q, None, [], skipped="needs exactly one doc_id")
-    pages = store.doc_pages(q.doc_ids[0])[:n_pages]
-    images = [(page_label(p.doc_id, p.page), Image.open(store.image_path(p))) for p in pages]
-    gen = vlm.generate(answer_prompt(q.question, q.answer_format), images=images, system=SYSTEM)
-    return _record("B2_direct_vlm", q, gen, [p.key for p in pages])
+    # If the GPU runs out of memory, halve the number of pages and retry (8 -> 4 -> 2 -> 1).
+    # The pages actually used are recorded, so the results table stays honest.
+    n = n_pages
+    while True:
+        pages = store.doc_pages(q.doc_ids[0])[:n]
+        images = [(page_label(p.doc_id, p.page), Image.open(store.image_path(p))) for p in pages]
+        try:
+            gen = vlm.generate(answer_prompt(q.question, q.answer_format), images=images, system=SYSTEM)
+            break
+        except Exception as e:  # noqa: BLE001
+            if "out of memory" not in str(e).lower() or n == 1:
+                raise
+            vlm.free_memory()
+            n = max(1, n // 2)
+            print(f"  {q.qid}: out of GPU memory, retrying B2 with {n} page(s)")
+    row = _record("B2_direct_vlm", q, gen, [p.key for p in pages])
+    row["pages_used"] = len(pages)
+    return row
 
 
 SYSTEMS = {"B1": run_b1, "B2": run_b2}

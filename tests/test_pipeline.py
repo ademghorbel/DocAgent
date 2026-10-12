@@ -35,3 +35,20 @@ def test_b1_and_b2_end_to_end(store):  # noqa: F811
 
     corpus_q = Question("q2", "manuals", "?", "x", doc_ids=[])
     assert run_b2(corpus_q, store, vlm)["skipped"]
+
+
+class OOMOnceVLM(FakeVLM):
+    """Runs out of memory whenever more than 2 images are passed."""
+    def generate(self, prompt, images=None, system=None, max_new_tokens=256):
+        if len(images or []) > 2:
+            raise RuntimeError("CUDA out of memory. Tried to allocate 7.27 GiB")
+        return super().generate(prompt, images, system, max_new_tokens)
+
+    def free_memory(self):
+        pass
+
+
+def test_b2_backs_off_on_oom(store):  # noqa: F811
+    q = Question("q1", "manuals", "?", "x", doc_ids=["pump_A.pdf"])
+    row = run_b2(q, store, OOMOnceVLM("Answer: x\nPages: none"), n_pages=8)
+    assert row["pages_used"] == 2 and row["prediction"] == "x"
