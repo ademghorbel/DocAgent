@@ -1,12 +1,11 @@
 doc_id,url,kind,why
-# One row per manual. doc_id becomes the file name (keep the .pdf ending). Lines starting with # are ignored.,,,
-# Fill the url with the manufacturer's public PDF link. PDFs are downloaded locally and never committed.,,,
-# Aim for: 2 drive manuals, 2 pump manuals, 1 PLC manual, 3-4 sensor datasheets.
-# drive_A.pdf,https://...,vfd,fault code table + wiring diagram
-# drive_B.pdf,https://...,vfd,second vendor for cross-document questions
-# pump_A.pdf,https://...,pump,troubleshooting table + pump curve figure
-# pump_B.pdf,https://...,pump,
-# plc_A.pdf,https://...,plc,long manual for multi-page questions
-# sensor_A.pdf,https://...,datasheet,temperature range + current draw tables
-# sensor_B.pdf,https://...,datasheet,
-# sensor_C.pdf,https://...,datasheet,
+# One row per manual. doc_id becomes the file name. Lines starting with # are ignored.
+# PDFs are downloaded on Kaggle and never committed.
+schneider_atv320_programming.pdf,https://download.schneider-electric.com/doc/NVE41295/ATV320_Programming_Manual_EN_NVE41295_04.pdf,vfd,~360 pages; ch.11 diagnostics and fault codes
+abb_acs580_firmware.pdf,https://www.ghv.de/files/elektrische-antriebstechnik/frequenzumrichter/acs580/downloads/dokumentationen/en_acs580_firmware_ghv.pdf,vfd,~490 pages; ch.9 warning and fault tables (distributor copy of ABB 3AXD50000016097)
+grundfos_cr_io.pdf,https://api.grundfos.com/literature/Grundfosliterature-3929721.pdf,pump,CR/CRI/CRN installation and operating instructions; fault finding table
+grundfos_scala2_io.pdf,https://api.grundfos.com/literature/Grundfosliterature-5769057.pdf,pump,SCALA2 booster pump; alarm codes
+siemens_s71200_easybook.pdf,https://cache.industry.siemens.com/dl/files/145/39710145/att_5787/v1/s71200_easy_book_en-US_en-US.pdf,plc,~440 pages; status LEDs and diagnostics; long manual for multi-page questions
+ti_tmp117.pdf,https://www.ti.com/lit/ds/symlink/tmp117.pdf,datasheet,-55 to 150 C; uA supply current
+ti_lm35.pdf,https://www.ti.com/lit/ds/symlink/lm35.pdf,datasheet,analog temperature sensor; compare with TMP117
+bosch_bme280.pdf,https://cdn.sparkfun.com/assets/5/3/0/f/7/BME280_Datasheet.pdf,datasheet,temperature/humidity/pressure; -40 to 85 C
