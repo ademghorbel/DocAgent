@@ -1,0 +1,13 @@
+# PyTorch is preinstalled on Kaggle and Colab; locally, install it first from pytorch.org for your CUDA version.
+transformers>=4.57          # Qwen2.5-VL and Qwen3-VL via AutoModelForImageTextToText
+accelerate>=1.0
+bitsandbytes>=0.45          # 4-bit loading; needs a T4 or newer (not P100)
+sentence-transformers>=3.0  # bge embeddings for the text baseline
+faiss-cpu>=1.8
+pymupdf>=1.24
+datasets>=3.0
+huggingface_hub>=0.25
+pillow>=10
+numpy
+wandb
+pytest

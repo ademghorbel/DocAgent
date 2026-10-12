@@ -1,0 +1,11 @@
+# Downloaded and generated data: reproducible from the scripts, never committed
+data/pdfs/
+data/pages/
+data/indexes/
+results/*/predictions.jsonl
+wandb/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+.env

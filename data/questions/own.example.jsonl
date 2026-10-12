@@ -1,0 +1,7 @@
+// Copy this file to own.jsonl and write ~30 questions. One JSON object per line; lines starting with // are ignored.
+// Pages are numbered from 1, as in a PDF viewer. doc_ids empty = search all manuals (realistic); one doc_id = also runs the direct-VLM baseline.
+// Prefer short exact answers (a value, a code, a name): they can be scored without an LLM judge. Use answer_format "Open" for procedures.
+// Tags: text | table | figure | multi-page | unanswerable. Aim for ~6 per tag.
+{"qid": "own-001", "collection": "manuals", "question": "What does fault code F0004 mean on the drive_A, and what is the first remedy listed?", "answer": "Motor overheat; check motor cooling and load", "answer_format": "Str", "doc_ids": ["drive_A.pdf"], "evidence": [{"doc_id": "drive_A.pdf", "page": 212}], "tags": ["table"], "source": "own"}
+{"qid": "own-002", "collection": "manuals", "question": "Which of sensor_A and sensor_B operates down to -40 °C?", "answer": "sensor_A", "answer_format": "Str", "doc_ids": [], "evidence": [{"doc_id": "sensor_A.pdf", "page": 3}, {"doc_id": "sensor_B.pdf", "page": 2}], "tags": ["table", "multi-page"], "source": "own"}
+{"qid": "own-003", "collection": "manuals", "question": "What is the warranty period for pump_A in months?", "answer": "Not answerable", "answer_format": "None", "doc_ids": ["pump_A.pdf"], "evidence": [], "tags": ["unanswerable"], "source": "own"}
