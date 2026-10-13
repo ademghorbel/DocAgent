@@ -32,8 +32,30 @@ def _record(system: str, q: Question, gen, retrieved: list[tuple[str, int]], ski
     }
 
 
+def select_pages(hits, k: int, max_chunks_per_page: int = 2):
+    """Keep chunks from the first k distinct pages (at most 2 chunks per page).
+
+    Several of the top chunks often come from the same page, so "top-5 chunks" can mean only
+    2-3 pages. Retrieval is compared page-for-page with ColQwen in week 2, so B1 must also
+    hand over k distinct pages.
+    """
+    pages, per_page, kept = [], {}, []
+    for h in hits:
+        key = (h.doc_id, h.page)
+        if key not in per_page:
+            if len(pages) == k:
+                continue
+            pages.append(key)
+            per_page[key] = 0
+        if per_page[key] < max_chunks_per_page:
+            per_page[key] += 1
+            kept.append(h)
+    return kept, pages
+
+
 def run_b1(q: Question, index: TextIndex, vlm: VLM, k: int = CFG.top_k) -> dict:
-    hits = index.search(q.question, k=k, doc_ids=q.doc_ids or None)
+    hits = index.search(q.question, k=k * 4, doc_ids=q.doc_ids or None)
+    hits, _ = select_pages(hits, k)
     context = "\n\n".join(f"{page_label(h.doc_id, h.page)}\n{h.text}" for h in hits)
     gen = vlm.generate(answer_prompt(q.question, q.answer_format, context), system=SYSTEM)
     return _record("B1_text_rag", q, gen, unique_pages(hits))

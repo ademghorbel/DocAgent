@@ -38,8 +38,9 @@ class Config:
     # Qwen-VL turns each 28x28 pixel block into one visual token; this caps tokens per page image.
     max_pixels_per_page: int = _env("DOCAGENT_MAX_PIXELS", 1024 * 28 * 28, int)
 
-    # Direct VLM (B2)
-    direct_vlm_pages: int = _env("DOCAGENT_DIRECT_PAGES", 8, int)
+    # Direct VLM (B2): 4 full-resolution pages (~4k visual tokens) is what fits on a 16 GB T4;
+    # 8 pages runs out of memory even with the model split over two T4s.
+    direct_vlm_pages: int = _env("DOCAGENT_DIRECT_PAGES", 4, int)
 
     seed: int = 42
     extra: dict = field(default_factory=dict)

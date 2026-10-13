@@ -11,7 +11,7 @@ _Week-1 numbers go here once the first Kaggle run is done (`results/week1/summar
 | System | What it is | Status |
 |---|---|---|
 | B1: Text RAG | Page text → bge embeddings + FAISS → top-k chunks → VLM | ✅ week 1 |
-| B2: Direct VLM | First N page images → VLM, no retrieval | ✅ week 1 |
+| B2: Direct VLM | First 4 page images → VLM, no retrieval (8 does not fit on a 16 GB T4) | ✅ week 1 |
 | B3: Multimodal RAG | ColQwen top-k page images → VLM | week 2 |
 | DocAgent | Planner → retrieve → tool (VLM read / table parser / calculator) → verifier | week 3 |
 

@@ -25,12 +25,12 @@
 
 **Thu: M4.** Run the smoke test (`--limit 5`). Open `predictions.jsonl` and read the `raw` replies. Things to check:
 - Does the model follow the `Answer:` / `Pages:` format? If not, tighten `docagent/prompts.py`.
-- Is B2 running out of memory? Lower `DOCAGENT_DIRECT_PAGES` to 4 or `DOCAGENT_MAX_PIXELS` to `600*28*28`.
+- Is B2 running out of memory? Lower `DOCAGENT_DIRECT_PAGES` to 2 or `DOCAGENT_MAX_PIXELS` to `600*28*28`.
 - Are the rule scores right? Fix any obviously wrong grading now, before the full run.
 
 **Fri: M5.** Write the 30 questions while flipping through the manuals. Short exact answers (a fault code meaning, a temperature, a current) make scoring reliable. Mix in about 6 cross-document questions ("which sensor…") and 6 unanswerable ones (e.g. warranty, price).
 
-**Sat: M6.** Full run on all three files with `--wandb`. B2 is the slow one (8 page images per question); expect roughly 30–60 minutes in total.
+**Sat: M6.** Full run on all three files with `--wandb`. B2 is the slow one (4 page images per question); expect roughly 30–60 minutes in total.
 
 **Sun: M7.**
 - Run `show_errors.py` and read 10 failures. Write two or three sentences on patterns, e.g. "B1 misses table questions because flattened tables lose their row/column structure".

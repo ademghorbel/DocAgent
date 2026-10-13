@@ -52,3 +52,13 @@ def test_b2_backs_off_on_oom(store):  # noqa: F811
     q = Question("q1", "manuals", "?", "x", doc_ids=["pump_A.pdf"])
     row = run_b2(q, store, OOMOnceVLM("Answer: x\nPages: none"), n_pages=8)
     assert row["pages_used"] == 2 and row["prediction"] == "x"
+
+
+def test_select_pages_gives_k_distinct_pages():
+    from docagent.baselines import select_pages
+    from docagent.retrieve import Hit
+    hits = [Hit("a", 1, .9, "x"), Hit("a", 1, .8, "y"), Hit("a", 1, .7, "z"), Hit("a", 2, .6, "w"),
+            Hit("b", 5, .5, "v"), Hit("a", 2, .4, "u"), Hit("c", 9, .3, "t")]
+    kept, pages = select_pages(hits, k=3)
+    assert pages == [("a", 1), ("a", 2), ("b", 5)]
+    assert [h.text for h in kept] == ["x", "y", "w", "v", "u"]   # max 2 chunks per page, no 4th page
