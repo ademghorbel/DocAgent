@@ -104,8 +104,13 @@ def main():
         print(f"  Dropped {len(dropped)} questions whose PDF could not be downloaded")
 
     questions = []
+    bad_pages = 0
     for i, r in enumerate(picked):
         pages = [int(p) for p in _as_list(r["evidence_pages"])]
+        # Pages are 1-based in MMLongBench ("the chart on page 14" -> [14]), but a few
+        # annotations say page 0. Drop those: they would count as misses for every system.
+        bad_pages += sum(p < 1 for p in pages)
+        pages = [p for p in pages if p >= 1]
         sources = [str(s) for s in _as_list(r["evidence_sources"])]
         questions.append(Question(
             qid=f"mmlb-{i:04d}",
@@ -120,6 +125,8 @@ def main():
             extra={"doc_type": r["doc_type"], "evidence_sources": sources},
         ))
     save_questions(args.out, questions)
+    if bad_pages:
+        print(f"  Removed {bad_pages} evidence page(s) numbered 0 (annotation error in the benchmark)")
     print(f"Saved {len(questions)} questions over {len(picked_docs)} documents -> {args.out}")
     print("Tag counts:", dict(Counter(t for q in questions for t in q.tags)))
 

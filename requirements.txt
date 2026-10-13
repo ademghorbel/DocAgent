@@ -11,3 +11,4 @@ pillow>=10
 numpy
 wandb
 pytest
+pytesseract

@@ -149,3 +149,11 @@ def test_summary_table():
     t = summary_table(rows, qs)
     assert "| B1_text_rag | 50.0 (2) | 0.0 (1) | 100.0 (1) |" in t
     assert "B2_direct_vlm" not in t
+
+
+def test_summary_counts_retrieval_on_unscored_rows():
+    qs = {"q1": Question("q1", "c", "?", "long open answer", "Open", tags=["text"])}
+    rows = [{"system": "B1_text_rag", "qid": "q1", "score": None, "recall_at_k": 0.5,
+             "cite_precision": 1.0, "latency_s": 3.0}]
+    t = summary_table(rows, qs)
+    assert "| B1_text_rag | – |" in t and "| 0.50 | 1.00 | 3.0 |" in t

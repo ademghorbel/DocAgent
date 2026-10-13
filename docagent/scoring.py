@@ -125,17 +125,23 @@ def summary_table(rows: list[dict], questions: dict[str, Question], k: int = 5) 
     """Markdown table: accuracy per system x tag, plus recall@k, citation precision and latency."""
     acc = defaultdict(lambda: defaultdict(list))
     extra = defaultdict(lambda: defaultdict(list))
+    systems = set()
     for r in rows:
-        if r.get("skipped") or r.get("score") is None:
+        if r.get("skipped"):
             continue
         q = questions[r["qid"]]
         s = r["system"]
-        acc[s]["all"].append(r["score"])
-        for t in q.tags:
-            acc[s][t].append(r["score"])
+        systems.add(s)
+        # Retrieval, citation and cost are measured on every answered question,
+        # even when its answer is not scored (open answers without the LLM judge).
         for key in ("recall_at_k", "cite_precision", "latency_s", "peak_gpu_gb"):
             if r.get(key) is not None:
                 extra[s][key].append(r[key])
+        if r.get("score") is None:
+            continue
+        acc[s]["all"].append(r["score"])
+        for t in q.tags:
+            acc[s][t].append(r["score"])
 
     def pct(v):
         return f"{100 * sum(v) / len(v):.1f} ({len(v)})" if v else "–"
@@ -147,7 +153,7 @@ def summary_table(rows: list[dict], questions: dict[str, Question], k: int = 5) 
     head = "| System | " + " | ".join(cols) + f" | Page recall@{k} | Citation precision | Latency (s) | Peak GPU (GB) |"
     sep = "|" + "---|" * (len(cols) + 5)
     lines = [head, sep]
-    for s in sorted(acc):
+    for s in sorted(systems):
         e = extra[s]
         lines.append(f"| {s} | " + " | ".join(pct(acc[s][c]) for c in cols) +
                      f" | {mean(e['recall_at_k'], '{:.2f}')} | {mean(e['cite_precision'], '{:.2f}')}"
