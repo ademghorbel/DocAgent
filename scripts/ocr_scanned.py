@@ -6,7 +6,7 @@ This fills in the text of those pages with Tesseract OCR and deletes the old tex
 is rebuilt. The vision systems are unaffected: they read the page images directly.
 
     apt-get install -y tesseract-ocr && pip install pytesseract
-    python scripts/ocr_scanned.py                    # all collections
+    python scripts/ocr_scanned.py                    # all collections except ViDoRe
     python scripts/ocr_scanned.py --collections mmlongbench manuals
 """
 from __future__ import annotations
@@ -67,8 +67,9 @@ def main():
     if shutil.which("tesseract") is None:
         sys.exit("Tesseract is not installed. Run: apt-get install -y tesseract-ocr && pip install pytesseract")
 
+    # ViDoRe ships its own text layer, so OCR there costs hours and adds little.
     names = args.collections or sorted(d.name for d in Path(CFG.pages_dir).iterdir()
-                                       if (d / "pages.jsonl").exists())
+                                       if (d / "pages.jsonl").exists() and d.name != "vidore_industrial")
     for name in names:
         n, filled = ocr_collection(name, args.workers)
         if n == -1:
