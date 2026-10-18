@@ -68,7 +68,9 @@ def main():
     from docagent.retrieve import BGEEmbedder, TextIndex
     from docagent.vlm import VLM
 
+    print("Loading the VLM (first run downloads ~16 GB, a few minutes)...", flush=True)
     vlm = VLM()
+    print("VLM ready.", flush=True)
     embedder = BGEEmbedder() if "B1" in args.systems else None
     stores, indexes = {}, {}
 
@@ -96,10 +98,10 @@ def main():
                 row = score_row(row, q, args.judge, vlm)
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")
                 out.flush()
+                status = "skipped" if row.get("skipped") else f"score {row.get('score')}, {row.get('latency_s', 0):.0f}s"
+                print(f"  [{i}/{len(questions)}] {full} {q.qid}: {status}", flush=True)
                 if run and row.get("score") is not None:
                     run.log({f"{full}/score": row["score"], f"{full}/latency_s": row["latency_s"]})
-            if i % 10 == 0:
-                print(f"  {i}/{len(questions)}")
 
     rows = [r for r in read_jsonl(pred_path) if r["qid"] in by_id]
     table = summary_table(rows, by_id, k=CFG.top_k)
