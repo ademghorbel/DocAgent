@@ -12,6 +12,7 @@ is rebuilt. The vision systems are unaffected: they read the page images directl
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from concurrent.futures import ProcessPoolExecutor
@@ -24,9 +25,16 @@ from docagent.data import PageStore  # noqa: E402
 
 
 def _ocr(path: str) -> str:
+    # One thread per Tesseract: several parallel copies that each spawn threads fight over the CPUs.
+    os.environ["OMP_THREAD_LIMIT"] = "1"
     import pytesseract
     from PIL import Image
-    return pytesseract.image_to_string(Image.open(path)).strip()
+    img = Image.open(path)
+    img.thumbnail((2000, 2000))  # posters and infographics render huge; OCR time grows with pixels
+    try:
+        return pytesseract.image_to_string(img, timeout=60).strip()
+    except RuntimeError:  # pytesseract raises this on timeout; leave the page empty
+        return ""
 
 
 def ocr_collection(name: str, workers: int = 4) -> tuple[int, int]:
@@ -43,7 +51,7 @@ def ocr_collection(name: str, workers: int = 4) -> tuple[int, int]:
     with ProcessPoolExecutor(workers) as pool:
         for t in pool.map(_ocr, [str(store.image_path(p)) for p in todo], chunksize=4):
             texts.append(t)
-            if len(texts) % 50 == 0:
+            if len(texts) % 10 == 0 or len(texts) == len(todo):
                 print(f"  {len(texts)}/{len(todo)} pages", flush=True)
     filled = 0
     for p, t in zip(todo, texts):
