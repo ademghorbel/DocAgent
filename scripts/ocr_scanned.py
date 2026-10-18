@@ -38,8 +38,13 @@ def ocr_collection(name: str, workers: int = 4) -> tuple[int, int]:
     if not todo:
         marker.touch()
         return 0, 0
+    print(f"{name}: OCR on {len(todo)} pages without text...", flush=True)
+    texts = []
     with ProcessPoolExecutor(workers) as pool:
-        texts = list(pool.map(_ocr, [str(store.image_path(p)) for p in todo], chunksize=4))
+        for t in pool.map(_ocr, [str(store.image_path(p)) for p in todo], chunksize=4):
+            texts.append(t)
+            if len(texts) % 50 == 0:
+                print(f"  {len(texts)}/{len(todo)} pages", flush=True)
     filled = 0
     for p, t in zip(todo, texts):
         p.scanned = True
