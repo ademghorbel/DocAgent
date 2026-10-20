@@ -1,9 +1,10 @@
-"""Week-1 baselines.
+"""Baselines.
 
 B1 text RAG: page text -> top-k chunks (bge + FAISS) -> VLM answers from text only.
 B2 direct VLM: the first N page images of the document -> VLM, no retrieval.
+B3 multimodal RAG: ColQwen top-k page images -> VLM, single shot (week 2).
 
-Both return the same record shape, which run_eval.py scores.
+All return the same record shape, which run_eval.py scores.
 """
 from __future__ import annotations
 
@@ -61,29 +62,44 @@ def run_b1(q: Question, index: TextIndex, vlm: VLM, k: int = CFG.top_k) -> dict:
     return _record("B1_text_rag", q, gen, unique_pages(hits))
 
 
-def run_b2(q: Question, store: PageStore, vlm: VLM, n_pages: int = CFG.direct_vlm_pages) -> dict:
-    # Direct VLM only makes sense when the question names one document. Corpus-wide questions
-    # (ViDoRe) are skipped rather than handed the gold document, which would leak the answer location.
-    if len(q.doc_ids) != 1:
-        return _record("B2_direct_vlm", q, None, [], skipped="needs exactly one doc_id")
-    # If the GPU runs out of memory, halve the number of pages and retry (8 -> 4 -> 2 -> 1).
-    # The pages actually used are recorded, so the results table stays honest.
-    n = n_pages
+def _ask_with_images(q: Question, store: PageStore, pages, vlm: VLM, tag: str):
+    """Send page images to the VLM. On out-of-memory, halve the pages and retry (4 -> 2 -> 1).
+    Returns (gen, pages actually sent), so the results table stays honest."""
+    n = len(pages)
     while True:
-        pages = store.doc_pages(q.doc_ids[0])[:n]
-        images = [(page_label(p.doc_id, p.page), Image.open(store.image_path(p))) for p in pages]
+        used = pages[:n]
+        images = [(page_label(p.doc_id, p.page), Image.open(store.image_path(p))) for p in used]
         try:
-            gen = vlm.generate(answer_prompt(q.question, q.answer_format), images=images, system=SYSTEM)
-            break
+            return vlm.generate(answer_prompt(q.question, q.answer_format), images=images, system=SYSTEM), used
         except Exception as e:  # noqa: BLE001
             if "out of memory" not in str(e).lower() or n == 1:
                 raise
             vlm.free_memory()
             n = max(1, n // 2)
-            print(f"  {q.qid}: out of GPU memory, retrying B2 with {n} page(s)")
-    row = _record("B2_direct_vlm", q, gen, [p.key for p in pages])
-    row["pages_used"] = len(pages)
+            print(f"  {q.qid}: out of GPU memory, retrying {tag} with {n} page(s)")
+
+
+def run_b2(q: Question, store: PageStore, vlm: VLM, n_pages: int = CFG.direct_vlm_pages) -> dict:
+    # Direct VLM only makes sense when the question names one document. Corpus-wide questions
+    # (ViDoRe) are skipped rather than handed the gold document, which would leak the answer location.
+    if len(q.doc_ids) != 1:
+        return _record("B2_direct_vlm", q, None, [], skipped="needs exactly one doc_id")
+    gen, used = _ask_with_images(q, store, store.doc_pages(q.doc_ids[0])[:n_pages], vlm, "B2")
+    row = _record("B2_direct_vlm", q, gen, [p.key for p in used])
+    row["pages_used"] = len(used)
     return row
 
 
-SYSTEMS = {"B1": run_b1, "B2": run_b2}
+def run_b3(q: Question, store: PageStore, vindex, vlm: VLM, k: int = CFG.top_k,
+           n_pages: int = CFG.direct_vlm_pages) -> dict:
+    """B3 multimodal RAG: ColQwen ranks page images, the top pages go to the VLM in one shot.
+    Recall is measured on the top k; the VLM sees the top n_pages (same image budget as B2)."""
+    ranked = [key for key, _ in vindex.search(q.qid, k=k, doc_ids=q.doc_ids or None)]
+    pages = [p for p in (store.get(d, pg) for d, pg in ranked[:n_pages]) if p is not None]
+    gen, used = _ask_with_images(q, store, pages, vlm, "B3")
+    row = _record("B3_colqwen_rag", q, gen, ranked)
+    row["pages_used"] = len(used)
+    return row
+
+
+SYSTEMS = {"B1": run_b1, "B2": run_b2, "B3": run_b3}

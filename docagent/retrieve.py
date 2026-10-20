@@ -110,10 +110,12 @@ class TextIndex:
     @classmethod
     def for_collection(cls, store: PageStore, embedder: Embedder, rebuild: bool = False) -> "TextIndex":
         folder = CFG.index_dir / store.collection / "text"
-        if folder.exists() and not rebuild:
+        stamp = folder / "n_pages.txt"   # an index built from a partial page store must not be reused
+        if folder.exists() and not rebuild and stamp.exists() and stamp.read_text().strip() == str(len(store)):
             return cls.load(folder, embedder)
         idx = cls.build(store, embedder)
         idx.save(folder)
+        stamp.write_text(str(len(store)))
         return idx
 
     # ----- search -----

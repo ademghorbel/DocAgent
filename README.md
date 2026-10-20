@@ -2,17 +2,17 @@
 
 When a machine raises an alert, DocAgent reads the equipment's manuals (text, tables and diagrams) and returns a sourced diagnosis with links to the exact pages. It runs on-premise with open-weight models and is benchmarked against standard RAG baselines.
 
-**Status: week 1 of 4.** Data pipeline and the first two baselines are in place. Page-image retrieval (ColQwen) comes in week 2, the agent in week 3, full results in week 4.
+**Status: week 2 of 4.** Data pipeline and three baselines are in place: text RAG, direct VLM and ColQwen page-image retrieval. The agent comes in week 3, full results in week 4.
 
 ## Results
 
-_Week-1 numbers go here once the first Kaggle run is done (`results/week1/summary.md`)._
+_Numbers go here once the first full Kaggle run is done (`results/baselines/summary.md`)._
 
 | System | What it is | Status |
 |---|---|---|
 | B1: Text RAG | Page text → bge embeddings + FAISS → top-k chunks → VLM | ✅ week 1 |
 | B2: Direct VLM | First 4 page images → VLM, no retrieval (8 does not fit on a 16 GB T4) | ✅ week 1 |
-| B3: Multimodal RAG | ColQwen top-k page images → VLM | week 2 |
+| B3: Multimodal RAG | ColQwen2 late-interaction page retrieval → top 4 page images → VLM | ✅ week 2 |
 | DocAgent | Planner → retrieve → tool (VLM read / table parser / calculator) → verifier | week 3 |
 
 The same VLM (Qwen2.5-VL-7B, 4-bit) answers for every system, so differences come from retrieval and the agent, not the model.
@@ -31,13 +31,14 @@ Every question is tagged `text`, `table`, `figure`, `multi-page` or `unanswerabl
 
 ## Reproduce
 
-Runs on a free Kaggle GPU (T4). Turn on Internet in the notebook settings.
+Runs on a free Kaggle GPU (T4 x2). Easiest: import `notebooks/docagent-kaggle.ipynb`, turn on Internet, and click **Save Version → Save & Run All**; it runs everything in the background. By hand:
 
 ```bash
 pip install -r requirements.txt
 python scripts/prepare_mmlongbench.py --n 100 --max-docs 15
 python scripts/prepare_vidore.py --n 60
-python eval/run_eval.py --questions data/questions/mmlongbench.jsonl data/questions/vidore_industrial.jsonl --systems B1 B2
+python scripts/index_pages.py --questions data/questions/*.jsonl      # ColQwen page index for B3
+python eval/run_eval.py --questions data/questions/*.jsonl --systems B1 B2 B3 --judge llm --run baselines
 ```
 
 Own manuals: add links to `data/manuals.csv`, run `python scripts/download_manuals.py`, write questions in `data/questions/own.jsonl` (see `own.example.jsonl`), then `python scripts/check_questions.py data/questions/own.jsonl`.

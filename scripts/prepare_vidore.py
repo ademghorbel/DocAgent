@@ -105,6 +105,10 @@ def main():
         if len(store) % 500 == 0:  # checkpoint: a rerun skips pages already saved
             store.save()
     store.save()
+    total = len(corpus)
+    if len(store) < total:
+        raise SystemExit(f"Only {len(store)}/{total} pages saved. Rerun to resume.")
+    (store.root / "COMPLETE").write_text(str(total))   # the notebook skips this step only when this file exists
     print(f"Page store: {len(store)} pages over {len(store.doc_ids())} documents in {store.root}")
 
 
