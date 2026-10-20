@@ -17,7 +17,7 @@
 
 ## Day by day
 
-**Mon: M1.** Create the GitHub repo `docagent` and push this code. On Kaggle: verify your phone number (needed for internet), new notebook, Accelerator **GPU T4 x2**, Internet **on**. Open `notebooks/week1_kaggle.ipynb` there and run the setup cells.
+**Mon: M1.** Create the GitHub repo `docagent` and push this code. On Kaggle: verify your phone number (needed for internet), new notebook, Accelerator **GPU T4 x2**, Internet **on**. Import `notebooks/docagent-kaggle.ipynb` there (File > Import Notebook).
 
 **Tue: M2.** Run the two preparation cells. Then click **Save Version → Save & Run All** once, so the rendered pages become notebook output you can attach later with **Add Input** instead of downloading again.
 
