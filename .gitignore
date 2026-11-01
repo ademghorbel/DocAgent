@@ -2,7 +2,7 @@
 data/pdfs/
 data/pages/
 data/indexes/
-results/*/predictions.jsonl
+results/*/predictions*.jsonl
 wandb/
 __pycache__/
 *.pyc

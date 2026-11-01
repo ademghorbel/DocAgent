@@ -1,0 +1,81 @@
+--- B1_text_rag | mmlb-0000 | tags ['multi-page', 'text']
+Q:     For the paper by Long Ouyang published in 2022, how many times has it been cited? 
+
+Gold:  6   (pages [('2312.09390v1.pdf', 1), ('2312.09390v1.pdf', 2), ('2312.09390v1.pdf', 5), ('2312.09390v1.pdf', 7), ('2312.09390v1.pdf', 32), ('2312.09390v1.pdf', 47)])
+Pred:  2
+Cited: [['2312.09390v1.pdf', 27]]   Retrieved: [['2312.09390v1.pdf', 27], ['2312.09390v1.pdf', 26], ['2312.09390v1.pdf', 20], ['2312.09390v1.pdf', 24], ['2312.09390v1.pdf', 25]]
+--- B2_direct_vlm | mmlb-0000 | tags ['multi-page', 'text']
+Q:     For the paper by Long Ouyang published in 2022, how many times has it been cited? 
+
+Gold:  6   (pages [('2312.09390v1.pdf', 1), ('2312.09390v1.pdf', 2), ('2312.09390v1.pdf', 5), ('2312.09390v1.pdf', 7), ('2312.09390v1.pdf', 32), ('2312.09390v1.pdf', 47)])
+Pred:  Not answerable
+Cited: [['2312.09390v1.pdf', 1]]   Retrieved: [['2312.09390v1.pdf', 1], ['2312.09390v1.pdf', 2], ['2312.09390v1.pdf', 3], ['2312.09390v1.pdf', 4]]
+--- B3_colqwen_rag | mmlb-0000 | tags ['multi-page', 'text']
+Q:     For the paper by Long Ouyang published in 2022, how many times has it been cited? 
+
+Gold:  6   (pages [('2312.09390v1.pdf', 1), ('2312.09390v1.pdf', 2), ('2312.09390v1.pdf', 5), ('2312.09390v1.pdf', 7), ('2312.09390v1.pdf', 32), ('2312.09390v1.pdf', 47)])
+Pred:  2
+Cited: [['2312.09390v1.pdf', 24]]   Retrieved: [['2312.09390v1.pdf', 26], ['2312.09390v1.pdf', 24], ['2312.09390v1.pdf', 25], ['2312.09390v1.pdf', 27], ['2312.09390v1.pdf', 22]]
+--- B1_text_rag | mmlb-0001 | tags ['figure']
+Q:     How many figures are shown in this guidebook to teach users "Two-finger scrolling" tips?
+Gold:  1   (pages [('Macbook_air.pdf', 33)])
+Pred:  0
+Cited: [['Macbook_air.pdf', 33]]   Retrieved: [['Macbook_air.pdf', 33], ['Macbook_air.pdf', 72], ['Macbook_air.pdf', 32], ['Macbook_air.pdf', 73], ['Macbook_air.pdf', 71]]
+--- B2_direct_vlm | mmlb-0001 | tags ['figure']
+Q:     How many figures are shown in this guidebook to teach users "Two-finger scrolling" tips?
+Gold:  1   (pages [('Macbook_air.pdf', 33)])
+Pred:  0
+Cited: [['Macbook_air.pdf', 1], ['Macbook_air.pdf', 2], ['Macbook_air.pdf', 3], ['Macbook_air.pdf', 4]]   Retrieved: [['Macbook_air.pdf', 1], ['Macbook_air.pdf', 2], ['Macbook_air.pdf', 3], ['Macbook_air.pdf', 4]]
+--- B1_text_rag | mmlb-0002 | tags ['figure']
+Q:     What are the two companies that offer both of business intelligence in its app and structured DB in its infrastructure? 
+Gold:  ['ORACLE', 'IBM']   (pages [('bigdatatrends-120723191058-phpapp02_95.pdf', 8)])
+Pred:  Oracle, Microsoft
+Cited: [['bigdatatrends-120723191058-phpapp02_95.pdf', 26], ['bigdatatrends-120723191058-phpapp02_95.pdf', 8]]   Retrieved: [['bigdatatrends-120723191058-phpapp02_95.pdf', 52], ['bigdatatrends-120723191058-phpapp02_95.pdf', 26], ['bigdatatrends-120723191058-phpapp02_95.pdf', 8], ['bigdatatrends-120723191058-phpapp02_95.pdf', 45], ['bigdatatrends-120723191058-phpapp02_95.pdf', 38]]
+--- B2_direct_vlm | mmlb-0002 | tags ['figure']
+Q:     What are the two companies that offer both of business intelligence in its app and structured DB in its infrastructure? 
+Gold:  ['ORACLE', 'IBM']   (pages [('bigdatatrends-120723191058-phpapp02_95.pdf', 8)])
+Pred:  Not answerable.
+Cited: []   Retrieved: [['bigdatatrends-120723191058-phpapp02_95.pdf', 1], ['bigdatatrends-120723191058-phpapp02_95.pdf', 2], ['bigdatatrends-120723191058-phpapp02_95.pdf', 3], ['bigdatatrends-120723191058-phpapp02_95.pdf', 4]]
+--- B1_text_rag | mmlb-0003 | tags ['figure', 'multi-page']
+Q:     How many figures are in this paper from Page 3 to Page 10? 
+Gold:  5   (pages [('2312.09390v1.pdf', 3), ('2312.09390v1.pdf', 6), ('2312.09390v1.pdf', 8), ('2312.09390v1.pdf', 9), ('2312.09390v1.pdf', 10)])
+Pred:  2
+Cited: [['2312.09390v1.pdf', 27], ['2312.09390v1.pdf', 29]]   Retrieved: [['2312.09390v1.pdf', 26], ['2312.09390v1.pdf', 21], ['2312.09390v1.pdf', 31], ['2312.09390v1.pdf', 27], ['2312.09390v1.pdf', 29]]
+--- B2_direct_vlm | mmlb-0003 | tags ['figure', 'multi-page']
+Q:     How many figures are in this paper from Page 3 to Page 10? 
+Gold:  5   (pages [('2312.09390v1.pdf', 3), ('2312.09390v1.pdf', 6), ('2312.09390v1.pdf', 8), ('2312.09390v1.pdf', 9), ('2312.09390v1.pdf', 10)])
+Pred:  2
+Cited: [['2312.09390v1.pdf', 3], ['2312.09390v1.pdf', 4]]   Retrieved: [['2312.09390v1.pdf', 1], ['2312.09390v1.pdf', 2], ['2312.09390v1.pdf', 3], ['2312.09390v1.pdf', 4]]
+--- B3_colqwen_rag | mmlb-0003 | tags ['figure', 'multi-page']
+Q:     How many figures are in this paper from Page 3 to Page 10? 
+Gold:  5   (pages [('2312.09390v1.pdf', 3), ('2312.09390v1.pdf', 6), ('2312.09390v1.pdf', 8), ('2312.09390v1.pdf', 9), ('2312.09390v1.pdf', 10)])
+Pred:  7
+Cited: [['2312.09390v1.pdf', 3], ['2312.09390v1.pdf', 4], ['2312.09390v1.pdf', 5], ['2312.09390v1.pdf', 6], ['2312.09390v1.pdf', 7], ['2312.09390v1.pdf', 8], ['2312.09390v1.pdf', 9]]   Retrieved: [['2312.09390v1.pdf', 34], ['2312.09390v1.pdf', 12], ['2312.09390v1.pdf', 41], ['2312.09390v1.pdf', 31], ['2312.09390v1.pdf', 42]]
+--- B2_direct_vlm | mmlb-0005 | tags ['text']
+Q:     What if the USB AC adaptor supplies an output less than 1.5 A for the headset?
+Gold:  the charging time will increase, and the music playback time after 10 minutes of charging will decrease.   (pages [('stereo_headset.pdf', 19)])
+Pred:  Not answerable.
+Pages: [stereo_headset.pdf p.1]
+Cited: [['stereo_headset.pdf', 1]]   Retrieved: [['stereo_headset.pdf', 1], ['stereo_headset.pdf', 2], ['stereo_headset.pdf', 3], ['stereo_headset.pdf', 4]]
+--- B1_text_rag | mmlb-0006 | tags ['text']
+Q:     Cold is the catalyst for what reaction?
+Gold:  the chemical reaction involving CFCs.   (pages [('b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 21)])
+Pred:  Not answerable
+Cited: [['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 21]]   Retrieved: [['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 21], ['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 6], ['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 3], ['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 4], ['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 13]]
+--- B2_direct_vlm | mmlb-0006 | tags ['text']
+Q:     Cold is the catalyst for what reaction?
+Gold:  the chemical reaction involving CFCs.   (pages [('b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 21)])
+Pred:  Not answerable
+Cited: [['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 3]]   Retrieved: [['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 1], ['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 2], ['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 3], ['b3m5kaeqm2w8n4bwcesw-140602121350-phpapp02_95.pdf', 4]]
+--- B1_text_rag | mmlb-0007 | tags ['figure', 'multi-page']
+Q:     How many figures are presented in the section of sensors?
+Gold:  14   (pages [('efis-140411041451-phpapp01_95.pdf', 16), ('efis-140411041451-phpapp01_95.pdf', 22), ('efis-140411041451-phpapp01_95.pdf', 23), ('efis-140411041451-phpapp01_95.pdf', 24), ('efis-140411041451-phpapp01_95.pdf', 25), ('efis-140411041451-phpapp01_95.pdf', 27), ('efis-140411041451-phpapp01_95.pdf', 28), ('efis-140411041451-phpapp01_95.pdf', 29)])
+Pred:  3
+Cited: [['efis-140411041451-phpapp01_95.pdf', 14], ['efis-140411041451-phpapp01_95.pdf', 15], ['efis-140411041451-phpapp01_95.pdf', 23]]   Retrieved: [['efis-140411041451-phpapp01_95.pdf', 14], ['efis-140411041451-phpapp01_95.pdf', 15], ['efis-140411041451-phpapp01_95.pdf', 23], ['efis-140411041451-phpapp01_95.pdf', 26], ['efis-140411041451-phpapp01_95.pdf', 24]]
+--- B2_direct_vlm | mmlb-0007 | tags ['figure', 'multi-page']
+Q:     How many figures are presented in the section of sensors?
+Gold:  14   (pages [('efis-140411041451-phpapp01_95.pdf', 16), ('efis-140411041451-phpapp01_95.pdf', 22), ('efis-140411041451-phpapp01_95.pdf', 23), ('efis-140411041451-phpapp01_95.pdf', 24), ('efis-140411041451-phpapp01_95.pdf', 25), ('efis-140411041451-phpapp01_95.pdf', 27), ('efis-140411041451-phpapp01_95.pdf', 28), ('efis-140411041451-phpapp01_95.pdf', 29)])
+Pred:  0
+Cited: [['efis-140411041451-phpapp01_95.pdf', 1]]   Retrieved: [['efis-140411041451-phpapp01_95.pdf', 1], ['efis-140411041451-phpapp01_95.pdf', 2], ['efis-140411041451-phpapp01_95.pdf', 3], ['efis-140411041451-phpapp01_95.pdf', 4]]
+
+213 wrong answers in total

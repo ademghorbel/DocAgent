@@ -44,7 +44,16 @@ _LABEL = re.compile(r"\[([^\[\]]+?)\s+p\.?\s*(\d+)\]")
 def parse_reply(text: str) -> tuple[str, list[tuple[str, int]]]:
     """Split 'Answer: ... Pages: ...' into (answer, [(doc_id, page), ...]). Tolerant of sloppy output."""
     answer_m = re.search(r"answer\s*:\s*(.*?)(?:\n\s*pages?\s*:|$)", text, flags=re.I | re.S)
-    answer = (answer_m.group(1) if answer_m else text).strip()
+    if answer_m:
+        answer = answer_m.group(1).strip()
+        # "<answer text> Answer: [doc.pdf p.3]": the model put its answer before the label
+        before = text[: answer_m.start()].strip()
+        if before and not _LABEL.sub("", answer).strip(" ,;"):
+            answer = before
+    else:
+        # No "Answer:" label: everything before the "Pages:" line is the answer
+        answer = re.split(r"\n\s*pages?\s*:", text, maxsplit=1, flags=re.I)[0].strip()
     pages_m = re.search(r"pages?\s*:\s*(.*)$", text, flags=re.I | re.S)
-    cited = [(d.strip(), int(p)) for d, p in _LABEL.findall(pages_m.group(1))] if pages_m else []
+    cited_from = pages_m.group(1) if pages_m else text[answer_m.start(1):] if answer_m else ""
+    cited = [(d.strip(), int(p)) for d, p in _LABEL.findall(cited_from)]
     return answer, list(dict.fromkeys(cited))

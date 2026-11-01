@@ -11,4 +11,5 @@ pillow>=10
 numpy
 wandb
 pytest
+langgraph>=0.6               # DocAgent graph (week 3)
 pytesseract

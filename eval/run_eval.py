@@ -2,6 +2,7 @@
 
     python eval/run_eval.py --questions data/questions/mmlongbench.jsonl --systems B1 B2
     python eval/run_eval.py --questions data/questions/*.jsonl --systems B1 B2 --judge llm --wandb
+    python eval/run_eval.py --questions data/questions/*.jsonl --systems DA --judge llm --run agent
 
 Results go to results/<run>/predictions.jsonl (one line per system x question) and
 results/<run>/summary.md. Reruns with the same --run skip questions already answered,
@@ -41,7 +42,8 @@ def score_row(row: dict, q: Question, judge: str, vlm) -> dict:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--questions", nargs="+", type=Path, required=True)
-    ap.add_argument("--systems", nargs="+", default=["B1", "B2"], choices=["B1", "B2", "B3"])
+    ap.add_argument("--systems", nargs="+", default=["B1", "B2"], choices=["B1", "B2", "B3", "DA"],
+                    help="DA = DocAgent (week 3); needs langgraph and, for best results, the ColQwen index")
     ap.add_argument("--run", default="week1")
     ap.add_argument("--limit", type=int, default=0, help="only the first N questions per file (smoke test)")
     ap.add_argument("--judge", choices=["rule", "llm"], default="rule",
@@ -65,6 +67,8 @@ def main():
     done = {(r["system"], r["qid"]) for r in read_jsonl(pred_path)} if pred_path.exists() else set()
 
     from docagent.baselines import run_b1, run_b2, run_b3
+    if "DA" in args.systems:
+        from docagent.agent import DocAgent, run_agent
     from docagent.retrieve import BGEEmbedder, TextIndex
     from docagent.visual import VisualIndex
     from docagent.vlm import VLM
@@ -72,8 +76,8 @@ def main():
     print("Loading the VLM (first run downloads ~16 GB, a few minutes)...", flush=True)
     vlm = VLM()
     print("VLM ready.", flush=True)
-    embedder = BGEEmbedder() if "B1" in args.systems else None
-    stores, indexes, vindexes = {}, {}, {}
+    embedder = BGEEmbedder() if {"B1", "DA"} & set(args.systems) else None
+    stores, indexes, vindexes, agents = {}, {}, {}, {}
 
     run = None
     if args.wandb:
@@ -86,20 +90,30 @@ def main():
         for i, q in enumerate(questions, 1):
             store = stores.setdefault(q.collection, PageStore(CFG.pages_dir, q.collection))
             for sysname in args.systems:
-                full = {"B1": "B1_text_rag", "B2": "B2_direct_vlm", "B3": "B3_colqwen_rag"}[sysname]
+                full = {"B1": "B1_text_rag", "B2": "B2_direct_vlm", "B3": "B3_colqwen_rag", "DA": "DA_agent"}[sysname]
                 if (full, q.qid) in done:
                     continue
-                if sysname == "B1":
-                    if q.collection not in indexes:
-                        print(f"Building text index for '{q.collection}' ({len(store)} pages)...")
-                        indexes[q.collection] = TextIndex.for_collection(store, embedder)
+                if sysname in ("B1", "DA") and q.collection not in indexes:
+                    print(f"Building text index for '{q.collection}' ({len(store)} pages)...")
+                    indexes[q.collection] = TextIndex.for_collection(store, embedder)
+                if sysname in ("B3", "DA") and q.collection not in vindexes:
+                    try:
+                        print(f"Loading ColQwen index for '{q.collection}'...")
+                        vindexes[q.collection] = VisualIndex.load(q.collection)
+                    except FileNotFoundError as e:
+                        if sysname == "B3":
+                            raise
+                        print(f"  {e} DocAgent uses text retrieval only for '{q.collection}'.")
+                        vindexes[q.collection] = None
+                if sysname == "DA":
+                    if q.collection not in agents:
+                        agents[q.collection] = DocAgent(store, vlm, indexes[q.collection], vindexes[q.collection])
+                    row = run_agent(q, agents[q.collection])
+                elif sysname == "B1":
                     row = run_b1(q, indexes[q.collection], vlm)
                 elif sysname == "B2":
                     row = run_b2(q, store, vlm)
                 else:
-                    if q.collection not in vindexes:
-                        print(f"Loading ColQwen index for '{q.collection}'...")
-                        vindexes[q.collection] = VisualIndex.load(q.collection)
                     row = run_b3(q, store, vindexes[q.collection], vlm)
                 row = score_row(row, q, args.judge, vlm)
                 out.write(json.dumps(row, ensure_ascii=False) + "\n")

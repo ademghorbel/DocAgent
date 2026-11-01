@@ -99,6 +99,11 @@ def test_parse_reply():
     assert ans == "The answer is 4.2 A" and cited == []
     _, cited = parse_reply("Answer: x\nPages: none")
     assert cited == []
+    # seen in the baselines run: no "Answer:" label, or the answer written before the label
+    ans, cited = parse_reply("MAVEN-ERE, ProofWriter\nPages: [paper.pdf p.6]")
+    assert ans == "MAVEN-ERE, ProofWriter" and cited == [("paper.pdf", 6)]
+    ans, cited = parse_reply("Fuel filter, Fuel pump Answer: [efis.pdf p.32]")
+    assert ans == "Fuel filter, Fuel pump" and cited == [("efis.pdf", 32)]
 
 
 def q(answer, fmt="Str"):
