@@ -2,9 +2,9 @@
 
 When a machine raises an alert, DocAgent reads the equipment's manuals (text, tables and diagrams) and returns a sourced diagnosis with links to the exact pages. It runs on-premise with open-weight models and is benchmarked against standard RAG baselines.
 
-**Status: week 3 of 4.** Three baselines are run and analysed (text RAG, direct VLM, ColQwen page-image RAG); the agent is built and its first full run is next. Final results and a demo in week 4.
+**Status: week 3 of 4.** Three baselines are run and analysed (text RAG, direct VLM, ColQwen page-image RAG); the agent is built and has its first full run (ties B3 at 54.3%). Final results and a demo in week 4.
 
-## Results (baselines, 151 questions)
+## Results (151 questions)
 
 Same answering model for every system: Qwen2.5-VL-7B in 4-bit, on a free Kaggle T4 x2.
 
@@ -13,7 +13,7 @@ Same answering model for every system: Qwen2.5-VL-7B in 4-bit, on a free Kaggle 
 | B1: Text RAG | 49.7 | 52.0 | 45.7 | 36.0 | 50.6 | **94.7** | 0.51 | 0.48 | 7.8 |
 | B2: Direct VLM | 25.3* | 21.4 | 0.0 | 5.4 | 11.4 | 68.4 | – | 0.20 | 13.2 |
 | B3: ColQwen RAG | **54.3** | **56.0** | **54.3** | **44.0** | 50.6 | 57.9 | **0.64** | **0.55** | 16.0 |
-| DocAgent | runs next | | | | | | | | |
+| DocAgent | **54.3** | 51.0 | 45.7 | 42.0 | 40.3 | 89.5 | 0.59 | 0.52 | 36.7 |
 
 Accuracy in %. \*B2 only answers the 91 single-document questions and sees only the first 4 pages. Full table with counts: [`results/baselines/summary.md`](results/baselines/summary.md); breakdown: [`analysis.md`](results/baselines/analysis.md).
 
@@ -66,7 +66,7 @@ Every answer keeps a trace (pages read, notes, verifier decision) for the demo a
 | B1: Text RAG | Page text → bge embeddings + FAISS → top-k chunks → VLM | ✅ week 1 |
 | B2: Direct VLM | First 4 page images → VLM, no retrieval (8 does not fit on a 16 GB T4) | ✅ week 1 |
 | B3: Multimodal RAG | ColQwen2 late-interaction page retrieval → top 4 page images → VLM | ✅ week 2 |
-| DocAgent | Fused retrieval → page-by-page reading → answer → verifier, with one follow-up search | ✅ week 3, run pending |
+| DocAgent | Fused retrieval → page-by-page reading → answer → verifier, with one follow-up search | ✅ week 3, first run done |
 
 The same VLM (Qwen2.5-VL-7B, 4-bit) answers for every system, so differences come from retrieval and the agent, not the model.
 
