@@ -90,7 +90,7 @@ def main():
         for i, q in enumerate(questions, 1):
             store = stores.setdefault(q.collection, PageStore(CFG.pages_dir, q.collection))
             for sysname in args.systems:
-                full = {"B1": "B1_text_rag", "B2": "B2_direct_vlm", "B3": "B3_colqwen_rag", "DA": "DA_agent"}[sysname]
+                full = {"B1": "B1_text_rag", "B2": "B2_direct_vlm", "B3": "B3_colqwen_rag", "DA": "DA_agent_v2"}[sysname]
                 if (full, q.qid) in done:
                     continue
                 if sysname in ("B1", "DA") and q.collection not in indexes:

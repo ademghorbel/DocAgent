@@ -9,11 +9,19 @@ What the B1/B2/B3 run showed (results/baselines/analysis.md):
 So the agent:
   retrieve  fuse ColQwen and text rankings (reciprocal rank fusion), take the next unread pages
   read      look at ONE page at a time, image plus its text layer, and copy out the facts that help
-  answer    answer from those notes, with the best one or two page images for a final look
+  answer    answer from those notes with the top pages shown together (pages with notes first),
+            so facts spread over several pages can be compared side by side
   verify    check the answer against the notes; if something is missing, write a follow-up search
             and go round once more. If no page had anything relevant, answer "Not answerable".
 
 The same VLM does every step, so a gain over B3 comes from the procedure, not a bigger model.
+
+After the first full run (DocAgent 54.3%, same as B3, but 40.3 vs 50.6 on multi-page questions and
+page recall@5 0.59 vs 0.64), two changes:
+- the answer step shows up to CFG.direct_vlm_pages page images at once, like B3, instead of two.
+  Notes are per page, so anything that needs two pages side by side was lost;
+- ColQwen counts double in the fusion (VISUAL_WEIGHT), since it is the stronger retriever
+  (84% hit rate vs 72% for text) and equal weights pulled recall below B3's.
 """
 from __future__ import annotations
 
@@ -22,15 +30,19 @@ from typing import TypedDict
 
 from PIL import Image
 
-from .config import CFG
+from .config import CFG, _env
 from .data import UNANSWERABLE, PageStore, Question
 from .prompts import SYSTEM, answer_prompt, page_label, parse_reply
 
 PAGES_PER_ROUND = 5        # pages read closely per round
 MAX_ROUNDS = 2             # round 2 only happens when the verifier asks for more
 PAGE_TEXT_CHARS = 2500     # text layer passed alongside each page image
-ANSWER_IMAGES = 2          # page images shown again at the answer step
+ANSWER_IMAGES = _env("DOCAGENT_ANSWER_IMAGES", CFG.direct_vlm_pages, int)   # page images at the answer step (B3's budget)
+VISUAL_WEIGHT = _env("DOCAGENT_VISUAL_WEIGHT", 2.0, float)                  # ColQwen's weight in the fusion, text = 1
 RRF_K = 60                 # standard reciprocal-rank-fusion constant
+# Name written to predictions.jsonl. A rerun skips (system, question) pairs that already have an
+# answer, so a changed agent needs a new name; the first version's rows stay as "DA_agent".
+SYSTEM_NAME = "DA_agent_v2"
 
 READ_PROMPT = """Question: {question}
 
@@ -68,12 +80,14 @@ class AgentState(TypedDict, total=False):
     peak_gpu_gb: float
 
 
-def rrf(rankings: list[list[tuple[str, int]]], k: int = RRF_K) -> list[tuple[str, int]]:
-    """Reciprocal rank fusion: a page ranked high by any retriever ends up near the top."""
+def rrf(rankings: list[list[tuple[str, int]]], weights: list[float] | None = None,
+        k: int = RRF_K) -> list[tuple[str, int]]:
+    """Reciprocal rank fusion: a page ranked high by any retriever ends up near the top.
+    weights (one per ranking, default 1) make one retriever count more than another."""
     score: dict[tuple[str, int], float] = {}
-    for ranking in rankings:
+    for ranking, w in zip(rankings, weights or [1.0] * len(rankings)):
         for rank, key in enumerate(ranking):
-            score[key] = score.get(key, 0.0) + 1.0 / (k + rank + 1)
+            score[key] = score.get(key, 0.0) + w / (k + rank + 1)
     return sorted(score, key=lambda key: -score[key])
 
 
@@ -83,12 +97,14 @@ def _is_none(note: str) -> bool:
 
 class DocAgent:
     def __init__(self, store: PageStore, vlm, text_index=None, visual_index=None,
-                 pages_per_round: int = PAGES_PER_ROUND, max_rounds: int = MAX_ROUNDS, depth: int = 20):
+                 pages_per_round: int = PAGES_PER_ROUND, max_rounds: int = MAX_ROUNDS, depth: int = 20,
+                 answer_images: int = ANSWER_IMAGES, visual_weight: float = VISUAL_WEIGHT):
         if text_index is None and visual_index is None:
             raise ValueError("DocAgent needs at least one retriever")
         self.store, self.vlm = store, vlm
         self.text_index, self.visual_index = text_index, visual_index
         self.pages_per_round, self.max_rounds, self.depth = pages_per_round, max_rounds, depth
+        self.answer_images, self.visual_weight = answer_images, visual_weight
         self.graph = self._build_graph()
 
     # ---------- helpers ----------
@@ -113,11 +129,13 @@ class DocAgent:
     def retrieve(self, state: AgentState) -> AgentState:
         q = state["question"]
         if state.get("round", 0) == 0:
-            rankings = []
+            rankings, weights = [], []
             if self.visual_index is not None and q.qid in self.visual_index.queries:
                 rankings.append([key for key, _ in self.visual_index.search(q.qid, k=self.depth, doc_ids=q.doc_ids)])
+                weights.append(self.visual_weight)
             rankings.append(self._text_pages(q.question, q.doc_ids))
-            state["ranking"] = rrf([r for r in rankings if r])
+            weights.append(1.0)
+            state["ranking"] = rrf(rankings, weights)
             state.update(read=[], notes={}, trace=[])
         else:
             # Round 2: pages found by the verifier's follow-up query come first, then the rest of the ranking.
@@ -150,10 +168,22 @@ class DocAgent:
             state["trace"].append("no page had relevant facts")
             return state
         notes = "\n\n".join(f"{page_label(*k)}\n{v}" for k, v in state["notes"].items())
-        best = [k for k in state["read"] if k in state["notes"]][:ANSWER_IMAGES]
-        images = [(page_label(*k), self._image(k)) for k in best]
+        # Pages with notes first, then the best-ranked other pages the reader saw, all in one prompt.
+        # The extra pages cover a reader that wrongly said NONE, and let the model compare pages.
+        best = ([k for k in state["read"] if k in state["notes"]]
+                + [k for k in state["read"] if k not in state["notes"]])[: self.answer_images]
         context = f"Notes taken while reading the pages:\n{notes}"
-        raw = self._gen(state, answer_prompt(q.question, q.answer_format, context), images=images)
+        prompt = answer_prompt(q.question, q.answer_format, context)
+        while True:   # on out-of-memory, halve the images and retry (4 -> 2 -> 1), as the baselines do
+            try:
+                raw = self._gen(state, prompt, images=[(page_label(*k), self._image(k)) for k in best])
+                break
+            except Exception as e:  # noqa: BLE001
+                if "out of memory" not in str(e).lower() or len(best) <= 1:
+                    raise
+                self.vlm.free_memory()
+                best = best[: max(1, len(best) // 2)]
+                state["trace"].append(f"out of GPU memory, answering with {len(best)} page image(s)")
         ans, cited = parse_reply(raw)
         state.update(answer=ans, cited=cited, raw=raw)
         state["trace"].append(f"answer: {ans[:80]}")
@@ -207,7 +237,7 @@ def run_agent(q: Question, agent: DocAgent) -> dict:
     s = agent.run(q)
     # Pages for recall@k: those the agent read, in order (round-1 pages are the top of the fused ranking).
     return {
-        "system": "DA_agent",
+        "system": SYSTEM_NAME,
         "qid": q.qid,
         "prediction": s.get("answer", ""),
         "raw": s.get("raw", ""),

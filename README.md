@@ -52,9 +52,9 @@ retrieve ──> read ──> answer ──> verify ──> done
    └──── follow-up search ─────────┘   (once, when the verifier says something is missing)
 ```
 
-1. **Retrieve:** fuse the ColQwen and text rankings (reciprocal rank fusion), since the two find different pages.
+1. **Retrieve:** fuse the ColQwen and text rankings (reciprocal rank fusion, ColQwen counts double), since the two find different pages.
 2. **Read:** look at one page at a time, image plus its text layer, and copy out the facts that help. A page with nothing useful returns `NONE`.
-3. **Answer** from those notes, with the one or two most useful page images for a last look.
+3. **Answer** from those notes, with the top pages shown together (up to 4, pages with notes first), so facts spread over several pages can be compared.
 4. **Verify:** the model checks the answer against the notes. If something is missing, it writes a follow-up search and the agent reads more pages once. If no page had anything useful, the answer is "Not answerable", which targets B3's main weakness.
 
 Every answer keeps a trace (pages read, notes, verifier decision) for the demo and for error analysis.
