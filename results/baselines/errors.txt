@@ -78,4 +78,4 @@ Gold:  14   (pages [('efis-140411041451-phpapp01_95.pdf', 16), ('efis-1404110414
 Pred:  0
 Cited: [['efis-140411041451-phpapp01_95.pdf', 1]]   Retrieved: [['efis-140411041451-phpapp01_95.pdf', 1], ['efis-140411041451-phpapp01_95.pdf', 2], ['efis-140411041451-phpapp01_95.pdf', 3], ['efis-140411041451-phpapp01_95.pdf', 4]]
 
-213 wrong answers in total
+392 wrong answers in total
