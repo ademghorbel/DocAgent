@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from docagent.config import CFG, ROOT  # noqa: E402
 
-PARTS = ["data/questions", "data/pages", "data/indexes", "data/pdfs", "results"]
+PARTS = ["data/questions", "data/pages", "data/indexes", "data/pdfs", "data/catalog", "results"]
 
 
 def find_saved_repo(base: Path = Path("/kaggle/input"), max_depth: int = 5) -> Path | None:

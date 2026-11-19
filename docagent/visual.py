@@ -72,6 +72,17 @@ class VisualIndex:
             queries = {k: z[k].astype(np.float32) for k in z.files}
         return cls(keys, np.concatenate(toks).astype(np.float32), np.concatenate(offsets), queries)
 
+    def add(self, keys: list[tuple[str, int]], vecs: list[np.ndarray]):
+        """Add the vectors of new pages (an uploaded manual), in memory."""
+        start = len(self.tokens)
+        offsets = start + np.cumsum([0] + [len(v) for v in vecs[:-1]])
+        first = len(self.keys)
+        self.keys = self.keys + list(keys)
+        self.tokens = np.concatenate([self.tokens] + [v.astype(np.float32) for v in vecs])
+        self.offsets = np.concatenate([self.offsets, offsets])
+        for i, (d, _) in enumerate(keys, first):
+            self._doc_pages[d] = np.append(self._doc_pages.get(d, np.array([], int)), i)
+
     def search(self, qid: str, k: int = CFG.top_k, doc_ids: list[str] | None = None) -> list[tuple[tuple[str, int], float]]:
         if qid not in self.queries:
             raise KeyError(f"No ColQwen query vector for {qid}. Rerun scripts/index_pages.py with its question file.")
@@ -84,6 +95,20 @@ class VisualIndex:
             return []
         order = rows[np.argsort(-scores[rows])[:k]]
         return [(self.keys[i], float(scores[i])) for i in order]
+
+
+def save_shard(collection: str, keys: list[tuple[str, int]], vecs: list[np.ndarray], n_pages: int):
+    """Write new page vectors as one more shard, so a restart loads them too. n_pages: new store size."""
+    folder = index_dir(collection)
+    folder.mkdir(parents=True, exist_ok=True)
+    n = len(list(folder.glob("shard_*.npz")))
+    offsets = np.cumsum([0] + [len(v) for v in vecs[:-1]])
+    np.savez(folder / f"shard_{n:05d}.npz", tokens=np.concatenate(vecs).astype(np.float16), offsets=offsets,
+             keys=json.dumps([[d, int(p)] for d, p in keys]))
+    meta = folder / "meta.json"   # keep index_pages.py from treating the grown store as a changed one
+    m = json.loads(meta.read_text()) if meta.exists() else {"model": COLQWEN_MODEL}
+    m["n_pages"] = n_pages
+    meta.write_text(json.dumps(m))
 
 
 class ColQwen:

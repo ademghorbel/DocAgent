@@ -2,7 +2,7 @@
 
 When a machine raises an alert, DocAgent reads the equipment's manuals (text, tables and diagrams) and returns a sourced diagnosis with links to the exact pages. It runs on-premise with open-weight models and is benchmarked against standard RAG baselines.
 
-**Status: week 4 of 4.** Three baselines (text RAG, direct VLM, ColQwen page-image RAG) and two versions of the agent are run on all 184 questions. DocAgent has the best overall accuracy (61.4%, against 59.2% for the best baseline), with a clear lead on single-document questions and a clear deficit on whole-corpus search. A Gradio demo turns a simulated drive alert into a sourced diagnosis.
+**Status: week 4 of 4.** Three baselines (text RAG, direct VLM, ColQwen page-image RAG) and two versions of the agent are run on all 184 questions. DocAgent has the best overall accuracy (61.4%, against 59.2% for the best baseline), with a clear lead on single-document questions and a clear deficit on whole-corpus search. A Gradio demo answers alerts and questions across all the manuals, with a fault catalog built from them.
 
 ## Results (184 questions)
 
@@ -116,7 +116,14 @@ Useful switches (environment variables): `DOCAGENT_VLM` (e.g. `Qwen/Qwen3-VL-8B-
 
 ## Demo
 
-A drive raises a fault code (OCF, OHF, PHF, ...). DocAgent reads the Schneider ATV320 manual and returns the diagnosis with page citations, the cited pages side by side and its trace (pages read, notes, verifier). On Kaggle, run the notebook's last cell, or by hand after the index step:
+Ask about any loaded manual, or pick a machine alert from any of them:
+
+- **Fault catalog.** The VLM reads each manual's fault pages once and writes one row per code (device, code, name, causes, remedy, page) to `data/catalog/faults.jsonl`. A question with a known code ("ACS580 fault 2310", "ATV320 shows OCF") is answered from it instantly, with the page. The catalog tab lists every code of every manual, searchable across brands. Missing rows are built in the background at launch (`scripts/build_catalog.py` does it ahead of time).
+- **Routing.** A device named in the question picks its manual (model first, then brand); no device named means all manuals.
+- **Agent.** Everything else (symptoms, settings, comparisons) goes to DocAgent, which answers with page citations, the pages side by side and its trace. When no manual covers the question it says so and lists the loaded manuals instead of guessing.
+- **Add a manual.** Upload a PDF: it is rendered, added to both indexes and catalogued on the spot.
+
+On Kaggle, run the notebook's last cell, or by hand after the index step:
 
 ```bash
 pip install gradio
@@ -131,7 +138,7 @@ docagent/      config, data formats, ingestion, text and visual retrieval, VLM l
 scripts/       benchmark preparation, manual download, question checker
 eval/          run_eval.py (runs and scores systems), analyze.py and show_errors.py (error analysis),
                rescore.py (re-parse and rescore a run without a GPU)
-demo/          app.py, the Gradio demo (alert in, sourced diagnosis out)
+demo/          app.py, the Gradio demo (alert or question in, sourced answer out; catalog, upload)
 data/          question files and the manual list (PDFs and rendered pages are downloaded, not committed)
 results/       summary, analysis, failures and judge check per run
 tests/         CPU-only tests: `pytest -q`

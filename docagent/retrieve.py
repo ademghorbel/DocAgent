@@ -118,6 +118,26 @@ class TextIndex:
         stamp.write_text(str(len(store)))
         return idx
 
+    def add_pages(self, pages) -> int:
+        """Add the chunks of new pages (an uploaded manual) without rebuilding the index."""
+        new = [{"doc_id": p.doc_id, "page": p.page, "text": c} for p in pages for c in chunk_text(p.text)]
+        if not new:
+            return 0
+        vecs = self.embedder.encode_docs([c["text"] for c in new])
+        start = len(self.chunks)
+        self.chunks += new
+        self.vectors = np.concatenate([self.vectors, vecs])
+        self.index.add(vecs)
+        for i, c in enumerate(new, start):
+            self._doc_rows[c["doc_id"]] = np.append(self._doc_rows.get(c["doc_id"], np.array([], int)), i)
+        return len(new)
+
+    def save_for(self, store: PageStore):
+        """Save where for_collection() looks, stamped with the current page count."""
+        folder = CFG.index_dir / store.collection / "text"
+        self.save(folder)
+        (folder / "n_pages.txt").write_text(str(len(store)))
+
     # ----- search -----
     def search(self, query: str, k: int = CFG.top_k, doc_ids: list[str] | None = None) -> list[Hit]:
         q = self.embedder.encode_query(query)
