@@ -2,7 +2,7 @@
 
 When a machine raises an alert, DocAgent reads the equipment's manuals (text, tables and diagrams) and returns a sourced diagnosis with links to the exact pages. It runs on-premise with open-weight models and is benchmarked against standard RAG baselines.
 
-**Status: week 4 of 4.** Three baselines (text RAG, direct VLM, ColQwen page-image RAG) and two versions of the agent are run on all 184 questions. DocAgent has the best overall accuracy (61.4%, against 59.2% for the best baseline), with a clear lead on single-document questions and a clear deficit on whole-corpus search. Demo still to come.
+**Status: week 4 of 4.** Three baselines (text RAG, direct VLM, ColQwen page-image RAG) and two versions of the agent are run on all 184 questions. DocAgent has the best overall accuracy (61.4%, against 59.2% for the best baseline), with a clear lead on single-document questions and a clear deficit on whole-corpus search. A Gradio demo turns a simulated drive alert into a sourced diagnosis.
 
 ## Results (184 questions)
 
@@ -114,6 +114,15 @@ Own manuals: add links to `data/manuals.csv`, run `python scripts/download_manua
 
 Useful switches (environment variables): `DOCAGENT_VLM` (e.g. `Qwen/Qwen3-VL-8B-Instruct`), `DOCAGENT_4BIT=0` for 16-bit, `DOCAGENT_TOP_K`, `DOCAGENT_DIRECT_PAGES`, `DOCAGENT_MAX_PIXELS`.
 
+## Demo
+
+A drive raises a fault code (OCF, OHF, PHF, ...). DocAgent reads the Schneider ATV320 manual and returns the diagnosis with page citations, the cited pages side by side and its trace (pages read, notes, verifier). On Kaggle, run the notebook's last cell, or by hand after the index step:
+
+```bash
+pip install gradio
+python demo/app.py --share     # public gradio.live link
+```
+
 ## Repo layout
 
 ```text
@@ -122,6 +131,7 @@ docagent/      config, data formats, ingestion, text and visual retrieval, VLM l
 scripts/       benchmark preparation, manual download, question checker
 eval/          run_eval.py (runs and scores systems), analyze.py and show_errors.py (error analysis),
                rescore.py (re-parse and rescore a run without a GPU)
+demo/          app.py, the Gradio demo (alert in, sourced diagnosis out)
 data/          question files and the manual list (PDFs and rendered pages are downloaded, not committed)
 results/       summary, analysis, failures and judge check per run
 tests/         CPU-only tests: `pytest -q`

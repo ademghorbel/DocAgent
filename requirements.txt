@@ -13,3 +13,4 @@ wandb
 pytest
 langgraph>=0.6               # DocAgent graph (week 3)
 pytesseract
+gradio>=4.40                 # demo/app.py
