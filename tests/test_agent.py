@@ -141,3 +141,9 @@ def test_compare_devices_asks_for_each_device_when_none_is_named(store):  # noqa
     s["question"] = Question("q", "manuals", "What battery?", "", doc_ids=["pump_A.pdf"])
     agent.answer(s)
     assert "separately" not in vlm.prompts[-1]   # device named: no hint
+
+
+def test_reader_replies_that_say_nothing_are_not_notes():
+    from docagent.agent import _is_none
+    assert _is_none("NONE") and _is_none("Not answerable.") and _is_none("The page does not provide the MTBF.")
+    assert not _is_none("TMP117: ±0.2 °C from -40 to 100 °C")

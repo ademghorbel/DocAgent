@@ -258,6 +258,9 @@ class Catalog:
         Returns how many rows changed."""
         changed = 0
         with self._lock:
+            n = len(self.faults)
+            self.faults = [x for x in self.faults if not _FIGURE_ID.match(x.code)]
+            changed += n - len(self.faults)
             for x in self.faults:
                 texts = {p: (store.get(x.doc_id, p).text or "") for p in x.pages if store.get(x.doc_id, p)}
                 if not texts:

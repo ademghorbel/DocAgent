@@ -50,6 +50,16 @@ EXAMPLES = [
 ]
 # A catalog row that points elsewhere ("see the remarks below") is not a full answer by itself.
 _POINTS_ELSEWHERE = re.compile(r"\b(remarks?|below|see (?:the )?(?:note|page|section|chapter)|refer to)\b", re.I)
+_SYMPTOM = re.compile(r"\b(trips?|tripp\w*|stops?|stopp\w*|fault\w*|alarm\w*|errors?|fails?|"
+                      r"won'?t|doesn'?t|does not|cannot|can'?t|overheat\w*|nois\w*|vibrat\w*|"
+                      r"shuts? (?:off|down)|problem|issue)\b", re.I)
+SYMPTOM_PROMPT = """A technician reports: {question}
+
+Fault codes of the {devices} (code: name: causes):
+{rows}
+
+Which of these codes could this symptom be? Reply with up to 3 codes, most likely first, separated
+by commas, and nothing else. If none fits, reply NONE."""
 _ASKS_HOW_TO_CLEAR = re.compile(r"\b(clear|reset|acknowledg|get rid of|remove)\w*", re.I)
 
 
@@ -123,7 +133,7 @@ class Demo:
         return [(f"Schneider ATV320 · {c} · {n}", f"{ATV320}|{c}") for c, n in FALLBACK_ALERTS]
 
     def table(self, text: str = "") -> list[list]:
-        return [[x.device, x.code, x.name, x.causes, x.remedy, ", ".join(map(str, x.pages))]
+        return [[x.device, x.code, x.name, x.causes, x.remedy, x.clearing, ", ".join(map(str, x.pages))]
                 for x in self.catalog.search(text)]
 
     # ---------- answering ----------
@@ -173,7 +183,27 @@ class Demo:
                                    [(x.doc_id, p) for x in hits[:2] for p in x.pages[:2]],
                                    "catalog: " + ", ".join(f"{x.device} {x.code}" for x in hits[:4])
                                    + " (row incomplete for this question: agent reads its pages first)")
+            likely = self._likely_faults(text, doc_ids)
+            if likely:   # a symptom: read the fault entries it most likely matches first
+                return self._agent(text, doc_ids, where, [(x.doc_id, x.pages[0]) for x in likely if x.pages],
+                                   "symptom -> likely faults: " + ", ".join(f"{x.device} {x.code}" for x in likely))
         return self._agent(text, doc_ids, where)
+
+    def _likely_faults(self, text: str, doc_ids: list[str], max_rows: int = 90) -> list[Fault]:
+        """For a symptom ('trips when accelerating'), ask the VLM which catalog codes fit, from the
+        catalog rows alone (one short text call). Their fault entries are then read first."""
+        if not _SYMPTOM.search(text):
+            return []
+        rows = [x for x in self.catalog.faults if (not doc_ids or x.doc_id in doc_ids) and (x.causes or x.name)]
+        if not rows or len(rows) > max_rows:   # too many manuals at once: leave it to retrieval
+            return []
+        listing = "\n".join(f"{x.code}: {x.name}: {x.causes[:140]}" for x in rows)
+        devices = ", ".join(sorted({x.device for x in rows}))
+        reply = self.vlm.generate(SYMPTOM_PROMPT.format(question=text, devices=devices, rows=listing),
+                                  max_new_tokens=30).text
+        by_code = {x.code.upper(): x for x in rows}
+        picked = [by_code[c.strip().upper()] for c in re.split(r"[,\s]+", reply) if c.strip().upper() in by_code]
+        return list(dict.fromkeys(picked))[:3]
 
     @staticmethod
     def _needs_pages(text: str, hits: list[Fault]) -> bool:
@@ -303,7 +333,8 @@ def build_ui(demo: Demo):
         with gr.Tab("Fault catalog"):
             find = gr.Textbox(label="Filter (device, code or any word)", placeholder="e.g. ATV320 overcurrent")
             table = gr.Dataframe(demo.table(), headers=["Device", "Code", "Name", "Probable causes",
-                                                        "What to do", "Pages"], wrap=True, interactive=False)
+                                                        "What to do", "Clearing", "Pages"],
+                                 wrap=True, interactive=False)
             again = gr.Button("Refresh")
         with gr.Tab("Add a manual"):
             gr.Markdown("Upload a PDF manual. It is rendered, indexed and its fault pages are read into the "

@@ -48,8 +48,15 @@ READ_PROMPT = """Question: {question}
 
 Above is one page{text_note}. Copy out every fact on this page that helps answer the question:
 exact numbers with units, names, table rows with their column headers, labels and counts from
-figures. Keep it short. Do not answer the question yet.
+figures. A fact that answers only part of the question counts (one device of a comparison, one
+possible cause of a symptom: fault codes, their causes and the settings involved). Keep it short.
+Do not answer the question yet.
 If nothing on this page helps, reply exactly: NONE"""
+
+# The reader sees one page; the shared SYSTEM prompt made it reply "Not answerable" for a page that
+# held half of the answer, and those replies were kept as notes.
+READER_SYSTEM = ("You read one page of a technical document and copy out the facts on it that are "
+                 "relevant to a question. Pages are labelled like [doc.pdf p.12].")
 
 VERIFY_PROMPT = """Question: {question}
 Proposed answer: {answer}
@@ -98,8 +105,12 @@ def rrf(rankings: list[list[tuple[str, int]]], weights: list[float] | None = Non
     return sorted(score, key=lambda key: -score[key])
 
 
+_NOTHING = re.compile(r"\W*(none|not answerable|n/?a)\W*|\W*(the|this) page does not (contain|provide|mention)\b.*",
+                      re.I | re.S)
+
+
 def _is_none(note: str) -> bool:
-    return not note.strip() or re.fullmatch(r"\W*none\W*", note.strip(), re.I) is not None
+    return not note.strip() or _NOTHING.fullmatch(note.strip()) is not None
 
 
 class DocAgent:
@@ -117,8 +128,9 @@ class DocAgent:
         self.graph = self._build_graph()
 
     # ---------- helpers ----------
-    def _gen(self, state: AgentState, prompt: str, images=None, max_new_tokens: int = CFG.max_new_tokens) -> str:
-        g = self.vlm.generate(prompt, images=images, system=SYSTEM, max_new_tokens=max_new_tokens)
+    def _gen(self, state: AgentState, prompt: str, images=None, max_new_tokens: int = CFG.max_new_tokens,
+             system: str = SYSTEM) -> str:
+        g = self.vlm.generate(prompt, images=images, system=system, max_new_tokens=max_new_tokens)
         state["latency_s"] = state.get("latency_s", 0.0) + g.latency_s
         state["input_tokens"] = state.get("input_tokens", 0) + g.input_tokens
         state["peak_gpu_gb"] = max(state.get("peak_gpu_gb", 0.0), g.peak_gpu_gb)
@@ -164,7 +176,8 @@ class DocAgent:
             text = (page.text or "").strip()[:PAGE_TEXT_CHARS]
             prompt = (f"Text layer of this page:\n{text}\n\n" if text else "") + READ_PROMPT.format(
                 question=q.question, text_note=" and its text layer" if text else "")
-            note = self._gen(state, prompt, images=[(page_label(*key), self._image(key))], max_new_tokens=160)
+            note = self._gen(state, prompt, images=[(page_label(*key), self._image(key))], max_new_tokens=160,
+                             system=READER_SYSTEM)
             state["read"].append(key)
             if not _is_none(note):
                 state["notes"][key] = note.strip()
