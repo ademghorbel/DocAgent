@@ -1,7 +1,8 @@
 """Fault catalog, device routing and adding a manual to the indexes (CPU, fake VLM)."""
 import numpy as np
 
-from docagent.catalog import Catalog, Fault, build, device_name, fault_pages, merge, parse_rows, route
+from docagent.catalog import (Catalog, Fault, build, device_name, fault_pages, ground_field, merge, parse_rows,
+                              route)
 from docagent.retrieve import TextIndex
 from docagent.visual import VisualIndex
 from docagent.vlm import GenResult
@@ -53,7 +54,7 @@ def test_merge_keeps_longest_text_and_all_pages():
     a = Fault("D", "x.pdf", "OCF", "Overcurrent", "short", "", [410])
     b = Fault("D", "x.pdf", "ocf", "", "a much longer cause list", "Check ramp", [411])
     (m,) = merge([a, b])
-    assert m.name == "Overcurrent" and m.causes == "a much longer cause list" and m.pages == [410, 411]
+    assert m.name == "Overcurrent" and m.causes == "a much longer cause list" and m.pages == [411, 410]   # page with the most text first
 
 
 def test_find_codes_is_strict_about_short_codes(tmp_path):
@@ -108,3 +109,40 @@ def test_visual_index_add():
     vi.add([("b", 1), ("b", 2)], [eye[[2]], eye[[3]]])
     assert vi.search("q", k=1)[0][0] == ("b", 2)
     assert vi.search("q", k=1, doc_ids=["a"])[0][0][0] == "a"
+
+
+def test_grounding_drops_causes_the_page_does_not_print(store, tmp_path):  # noqa: F811
+    page = "Bit 4 Overcurrent fault: Yes = drive has tripped on fault 2310 Overcurrent."
+    assert ground_field("Overload; Incorrect motor sizing; Faulty motor", page) == ""
+    fault_page = "2310 Overcurrent. Cause: acceleration time too short. Remedy: increase the ramp time."
+    assert ground_field("Acceleration time too short; Faulty motor", fault_page) == "Acceleration time too short"
+    assert ground_field("anything at all", "") == "anything at all"   # scanned page: can't check, keep
+    cat = Catalog(tmp_path / "faults.jsonl")
+    cat.add([Fault("Pump A", "pump_A.pdf", "E-47", "", "Closed outlet valve; Broken impeller blade",
+                   "Open the outlet valve", [1, 2])], "pump_A.pdf")
+    assert cat.reground(store) == 1
+    (f,) = cat.faults
+    assert f.causes == "Closed outlet valve" and f.pages[0] == 2
+
+
+def test_parse_rows_reads_clearing_column():
+    (r,) = parse_rows("CFF | Incorrect config | Option removed | Check modules | Press ENT twice", "D", "a.pdf", 405)
+    assert (r.remedy, r.clearing) == ("Check modules", "Press ENT twice")
+
+
+def test_tidy_moves_items_to_their_column():
+    from docagent.catalog import tidy
+    r = tidy(Fault("D", "a.pdf", "ANF", "Load slipping", "Speed feedback not correct; Check the motor; Add a braking resistor",
+                   "This detected error requires a power reset of the device after its cause has been removed."))
+    assert r.causes == "Speed feedback not correct"
+    assert r.remedy == "Check the motor; Add a braking resistor"
+    assert r.clearing.startswith("This detected error requires a power reset")
+
+
+def test_figure_numbers_are_not_codes_and_mixed_case_codes_match_in_capitals(tmp_path):
+    assert parse_rows("TM053827 | Power off | | Press the button", "G", "g.pdf", 21) == []
+    cat = Catalog(tmp_path / "faults.jsonl")
+    cat.add([Fault("Schneider ATV320", "atv.pdf", "phf"), Fault("Schneider ATV320", "atv.pdf", "AsF")], "atv.pdf")
+    codes = lambda q: [f.code for f in cat.find_codes(q)]  # noqa: E731
+    assert codes("drive shows PHF") == ["phf"] and codes("ASF on the display") == ["AsF"]
+    assert codes("the asf thing") == []      # lowercase word: not trusted

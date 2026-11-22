@@ -61,10 +61,17 @@ Do the notes fully support the proposed answer?
 Reply SUPPORTED if they do.
 Otherwise reply MISSING: <a short search query for the information that is still missing>"""
 
+# Demo only: a question that names no device can match several manuals that disagree
+# ("what battery does the terminal use": CR2032 in the ATV320, CR1025 in the S7-1200).
+SEVERAL_DEVICES = ("The question names no device and the notes come from manuals of different devices "
+                   "({devices}). If they give different answers, give each device's answer separately, "
+                   "naming the device; do not pick one.")
+
 
 class AgentState(TypedDict, total=False):
     question: Question
     ranking: list[tuple[str, int]]     # fused page ranking, best first
+    first_pages: list[tuple[str, int]] # pages read before the ranking (e.g. a fault-catalog hit)
     batch: list[tuple[str, int]]       # pages to read in this round
     read: list[tuple[str, int]]        # pages already read, in reading order
     notes: dict                        # (doc_id, page) -> note text (only pages with something useful)
@@ -98,13 +105,15 @@ def _is_none(note: str) -> bool:
 class DocAgent:
     def __init__(self, store: PageStore, vlm, text_index=None, visual_index=None,
                  pages_per_round: int = PAGES_PER_ROUND, max_rounds: int = MAX_ROUNDS, depth: int = 20,
-                 answer_images: int = ANSWER_IMAGES, visual_weight: float = VISUAL_WEIGHT):
+                 answer_images: int = ANSWER_IMAGES, visual_weight: float = VISUAL_WEIGHT,
+                 compare_devices: bool = False):
         if text_index is None and visual_index is None:
             raise ValueError("DocAgent needs at least one retriever")
         self.store, self.vlm = store, vlm
         self.text_index, self.visual_index = text_index, visual_index
         self.pages_per_round, self.max_rounds, self.depth = pages_per_round, max_rounds, depth
         self.answer_images, self.visual_weight = answer_images, visual_weight
+        self.compare_devices = compare_devices
         self.graph = self._build_graph()
 
     # ---------- helpers ----------
@@ -135,7 +144,8 @@ class DocAgent:
                 weights.append(self.visual_weight)
             rankings.append(self._text_pages(q.question, q.doc_ids))
             weights.append(1.0)
-            state["ranking"] = rrf(rankings, weights)
+            first = [k for k in state.get("first_pages") or [] if self.store.get(*k)]
+            state["ranking"] = first + [k for k in rrf(rankings, weights) if k not in first]
             state.update(read=[], notes={}, trace=[])
         else:
             # Round 2: pages found by the verifier's follow-up query come first, then the rest of the ranking.
@@ -173,6 +183,10 @@ class DocAgent:
         best = ([k for k in state["read"] if k in state["notes"]]
                 + [k for k in state["read"] if k not in state["notes"]])[: self.answer_images]
         context = f"Notes taken while reading the pages:\n{notes}"
+        docs = list(dict.fromkeys(k[0] for k in state["notes"]))
+        if self.compare_devices and not q.doc_ids and len(docs) > 1:
+            from .catalog import device_name
+            context += "\n\n" + SEVERAL_DEVICES.format(devices=", ".join(device_name(d) for d in docs))
         prompt = answer_prompt(q.question, q.answer_format, context)
         while True:   # on out-of-memory, halve the images and retry (4 -> 2 -> 1), as the baselines do
             try:
@@ -228,8 +242,9 @@ class DocAgent:
         return g.compile()
 
     # ---------- public ----------
-    def run(self, q: Question) -> AgentState:
-        return self.graph.invoke({"question": q, "round": 0}, {"recursion_limit": 4 * self.max_rounds + 4})
+    def run(self, q: Question, first_pages: list[tuple[str, int]] | None = None) -> AgentState:
+        return self.graph.invoke({"question": q, "round": 0, "first_pages": list(first_pages or [])},
+                                 {"recursion_limit": 4 * self.max_rounds + 4})
 
 
 def run_agent(q: Question, agent: DocAgent) -> dict:

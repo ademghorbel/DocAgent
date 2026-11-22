@@ -114,3 +114,30 @@ def test_verifier_triggers_a_second_round(store):  # noqa: F811
     assert [c[0] for c in vlm.calls] == ["read", "answer", "verify", "read", "answer", "verify"]
     assert any("search 'error E-47 troubleshooting table'" in t for t in row["trace"])
     assert row["prediction"] == "Discharge pressure too high"
+
+
+def test_first_pages_are_read_before_the_ranking(store):  # noqa: F811
+    vlm = ScriptedVLM({"[pump_A.pdf p.4]": "Rated current 4.2 A"})
+    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), None, pages_per_round=1)
+    agent.run(Q, first_pages=[("pump_A.pdf", 4)])
+    assert vlm.calls[0] == ("read", ["[pump_A.pdf p.4]"])
+
+
+def test_compare_devices_asks_for_each_device_when_none_is_named(store):  # noqa: F811
+    class Recording(ScriptedVLM):
+        prompts = []
+
+        def generate(self, prompt, images=None, system=None, max_new_tokens=256):
+            self.prompts.append(prompt)
+            return super().generate(prompt, images, system, max_new_tokens)
+
+    vlm = Recording({})
+    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), None, compare_devices=True)
+    s = {"question": Question("q", "manuals", "What battery?", ""), "read": [("pump_A.pdf", 2), ("pump_B.pdf", 1)],
+         "notes": {("pump_A.pdf", 2): "CR2032", ("pump_B.pdf", 1): "CR1025"}, "trace": []}
+    agent.answer(s)
+    assert "give each device's answer separately" in vlm.prompts[-1]
+    vlm.prompts.clear()
+    s["question"] = Question("q", "manuals", "What battery?", "", doc_ids=["pump_A.pdf"])
+    agent.answer(s)
+    assert "separately" not in vlm.prompts[-1]   # device named: no hint

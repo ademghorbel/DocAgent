@@ -14,6 +14,7 @@ cell first). Run:  python demo/app.py --share
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import sys
 import threading
@@ -47,6 +48,9 @@ EXAMPLES = [
     "Which temperature sensor is more accurate around 100 °C, the TMP117 or the LM35?",
     "What does ISA-18.2 say about alarm flooding?",
 ]
+# A catalog row that points elsewhere ("see the remarks below") is not a full answer by itself.
+_POINTS_ELSEWHERE = re.compile(r"\b(remarks?|below|see (?:the )?(?:note|page|section|chapter)|refer to)\b", re.I)
+_ASKS_HOW_TO_CLEAR = re.compile(r"\b(clear|reset|acknowledg|get rid of|remove)\w*", re.I)
 
 
 class LockedVLM:
@@ -82,8 +86,12 @@ class Demo:
             print("No ColQwen index, text retrieval only:", e, flush=True)
             self.vindex, self.colqwen = None, None
         self.vlm = LockedVLM(VLM(), self.gpu)
-        self.agent = DocAgent(self.store, self.vlm, self.text_index, self.vindex)
+        self.agent = DocAgent(self.store, self.vlm, self.text_index, self.vindex, compare_devices=True)
         self.catalog = Catalog()
+        fixed = self.catalog.reground(self.store)   # rows built before grounding: drop invented causes
+        if fixed:
+            print(f"Catalog: re-checked against the pages, {fixed} rows changed", flush=True)
+            self.catalog.save()
         self.status = f"Catalog: {len(self.catalog)} codes from {len(self.catalog.done)} manuals."
         self.n = 0
         if build_catalog and set(self.store.doc_ids()) - self.catalog.done:
@@ -141,6 +149,7 @@ class Demo:
             parts.append(f"#### {x.device}: fault {x.code}" + (f", {x.name}" if x.name else "")
                          + (f"\n\n**Probable causes:** {x.causes}" if x.causes else "")
                          + (f"\n\n**What to do:** {x.remedy}" if x.remedy else "")
+                         + (f"\n\n**Clearing it:** {x.clearing}" if x.clearing else "")
                          + f"\n\n**Source:** {src}")
         report = ("### From the fault catalog (exact code match)\n\n" + "\n\n".join(parts)
                   + f"\n\n*Instant, no model call. Searched: {where}. Untick \"Fault catalog first\" "
@@ -157,8 +166,26 @@ class Demo:
         where = ", ".join(device_name(d) for d in doc_ids) if doc_ids else "all manuals"
         if use_catalog:
             hits = self.catalog.find_codes(text, doc_ids or None)
-            if hits:
+            if hits and not self._needs_pages(text, hits):
                 return self._from_catalog(hits[:4], where)
+            if hits:   # the catalog knows the page; the agent reads it first for the full answer
+                return self._agent(text, sorted({x.doc_id for x in hits}), where,
+                                   [(x.doc_id, p) for x in hits[:2] for p in x.pages[:2]],
+                                   "catalog: " + ", ".join(f"{x.device} {x.code}" for x in hits[:4])
+                                   + " (row incomplete for this question: agent reads its pages first)")
+        return self._agent(text, doc_ids, where)
+
+    @staticmethod
+    def _needs_pages(text: str, hits: list[Fault]) -> bool:
+        """The catalog row alone doesn't answer: it refers to text it didn't copy, or the question asks
+        how to clear the fault and the row has no clearing step."""
+        if not any(x.causes or x.remedy for x in hits):   # only a name left after grounding
+            return True
+        if any(_POINTS_ELSEWHERE.search(f"{x.remedy} {x.clearing}") for x in hits):
+            return True
+        return bool(_ASKS_HOW_TO_CLEAR.search(text)) and not any(x.clearing for x in hits)
+
+    def _agent(self, text: str, doc_ids: list[str], where: str, first_pages=None, note: str = ""):
 
         self.n += 1
         qid = f"demo-{self.n}"
@@ -168,12 +195,12 @@ class Demo:
         q = Question(qid=qid, collection=COLLECTION, question=text, answer="",
                      answer_format="Open", doc_ids=doc_ids)
         try:
-            s = self.agent.run(q)
+            s = self.agent.run(q, first_pages=first_pages)
         finally:
             if self.vindex is not None:
                 self.vindex.queries.pop(qid, None)
 
-        trace = f"routed to: {where}\n" + "\n".join(s.get("trace", []))
+        trace = f"routed to: {where}\n" + (f"{note}\n" if note else "") + "\n".join(s.get("trace", []))
         answer = s.get("answer", "")
         if answer.strip().lower().startswith(UNANSWERABLE.lower()):
             loaded = ", ".join(n for n, _ in self.docs())
@@ -182,7 +209,10 @@ class Demo:
                     f"\"Add a manual\" tab and ask again.", [], trace)
         cited = [tuple(c) for c in s.get("cited", [])]
         sources = ", ".join(page_label(*c) for c in cited) or "none"
-        report = (f"### Answer\n\n{answer}\n\n**Sources:** {sources}\n\n"
+        warning = ("> **Not confirmed:** the verifier could not match this answer to the notes taken from "
+                   "the pages. Check the source pages before acting on it.\n\n"
+                   if s.get("verdict") == "missing" else "")
+        report = (f"### Answer\n\n{warning}{answer}\n\n**Sources:** {sources}\n\n"
                   f"*Searched: {where}. {s.get('latency_s', 0):.0f} s, {len(s.get('read', []))} pages read, "
                   f"{s.get('round', 0)} round(s), verifier: {s.get('verdict', '')}*")
         return report, self._pages(cited or s.get("read", [])[:2]), trace
@@ -268,7 +298,8 @@ def build_ui(demo: Demo):
                     trace = gr.Textbox(label="Trace (routing, pages read, notes, verifier)", lines=10)
                 with gr.Column(scale=3):
                     report = gr.Markdown()
-                    pages = gr.Gallery(label="Source pages", columns=2, height=640)
+                    # contain: the whole page fits, heading included
+                    pages = gr.Gallery(label="Source pages", columns=2, height=720, object_fit="contain")
         with gr.Tab("Fault catalog"):
             find = gr.Textbox(label="Filter (device, code or any word)", placeholder="e.g. ATV320 overcurrent")
             table = gr.Dataframe(demo.table(), headers=["Device", "Code", "Name", "Probable causes",
