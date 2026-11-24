@@ -147,3 +147,5 @@ def test_reader_replies_that_say_nothing_are_not_notes():
     from docagent.agent import _is_none
     assert _is_none("NONE") and _is_none("Not answerable.") and _is_none("The page does not provide the MTBF.")
     assert not _is_none("TMP117: ±0.2 °C from -40 to 100 °C")
+    assert not _is_none("The page does not mention 100 °C, but gives ±0.15 °C from -40 to 70 °C.")
+    assert _is_none("This page does not mention the TMP117.")

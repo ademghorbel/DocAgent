@@ -179,7 +179,9 @@ class Demo:
             if hits and not self._needs_pages(text, hits):
                 return self._from_catalog(hits[:4], where)
             if hits:   # the catalog knows the page; the agent reads it first for the full answer
-                return self._agent(text, sorted({x.doc_id for x in hits}), where,
+                # ponytail: hand the row to the agent so a page with several faults is read for this one
+                rows = "; ".join(f"{x.code} = {x.name}" + (f", clearing: {x.clearing}" if x.clearing else "") for x in hits[:2])
+                return self._agent(f"{text}\n(Fault catalog: {rows})", sorted({x.doc_id for x in hits}), where,
                                    [(x.doc_id, p) for x in hits[:2] for p in x.pages[:2]],
                                    "catalog: " + ", ".join(f"{x.device} {x.code}" for x in hits[:4])
                                    + " (row incomplete for this question: agent reads its pages first)")

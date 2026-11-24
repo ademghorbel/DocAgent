@@ -110,7 +110,9 @@ _NOTHING = re.compile(r"\W*(none|not answerable|n/?a)\W*|\W*(the|this) page does
 
 
 def _is_none(note: str) -> bool:
-    return not note.strip() or _NOTHING.fullmatch(note.strip()) is not None
+    # ponytail: a hedge that still quotes numbers ("does not give 100 °C, but ±0.15 °C to 70 °C") is a fact
+    note = note.strip()
+    return not note or (_NOTHING.fullmatch(note) is not None and not re.search(r"(?<!\w)\d", note))   # not model names like TMP117
 
 
 class DocAgent:
