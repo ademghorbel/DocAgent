@@ -2,7 +2,7 @@
 
 When a machine raises an alert, DocAgent reads the equipment's manuals (text, tables and diagrams) and returns a sourced diagnosis with links to the exact pages. It runs on-premise with open-weight models and is benchmarked against standard RAG baselines.
 
-**Status: week 4 of 4.** Three baselines (text RAG, direct VLM, ColQwen page-image RAG) and two versions of the agent are run on all 184 questions. DocAgent has the best overall accuracy (61.4%, against 59.2% for the best baseline), with a clear lead on single-document questions and a clear deficit on whole-corpus search. A Gradio demo answers alerts and questions across all the manuals, with a fault catalog built from them.
+**Status: benchmark complete (4-week build, Oct–Nov 2026); demo still in testing.** Three baselines (text RAG, direct VLM, ColQwen page-image RAG) and two versions of the agent are run on all 184 questions. DocAgent has the best overall accuracy (61.4%, against 59.2% for the best baseline), with a clear lead on single-document questions and a clear deficit on whole-corpus search. A Gradio demo answers alerts and questions across all the manuals, with a fault catalog built from them.
 
 ## Results (184 questions)
 
