@@ -227,13 +227,15 @@ def merge(rows: list[Fault]) -> list[Fault]:
 class Catalog:
     """faults.jsonl, plus done.json: the manuals already read (also those with no fault codes)."""
 
-    def __init__(self, path: Path = CATALOG_PATH):
-        self.path = Path(path)
+    def __init__(self, path: Path | None = None):
+        # Default path (demo, build script): start from the committed copy when DOCAGENT_CATALOG points
+        # elsewhere (e.g. Kaggle's working dir). An explicit path (tests) starts empty if it doesn't exist.
+        self.path = Path(path or CATALOG_PATH)
         self._lock = threading.RLock()
         self.faults: list[Fault] = []
         self.done: set[str] = set()
-        seed = CFG.data_dir / "catalog" / "faults.jsonl"   # committed copy, if the path points elsewhere
-        src = self.path if self.path.exists() else seed if seed.exists() else None
+        seed = CFG.data_dir / "catalog" / "faults.jsonl" if path is None else None
+        src = self.path if self.path.exists() else seed if seed and seed.exists() else None
         if src:
             with src.open(encoding="utf-8") as f:
                 self.faults = [Fault(**json.loads(line)) for line in f if line.strip()]
