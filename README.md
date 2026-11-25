@@ -2,7 +2,7 @@
 
 When a machine raises an alert, DocAgent reads the equipment's manuals (text, tables and diagrams) and returns a sourced diagnosis with links to the exact pages. It runs on-premise with open-weight models and is benchmarked against standard RAG baselines.
 
-**Status: benchmark complete (4-week build, Oct–Nov 2026); demo still in testing.** Three baselines (text RAG, direct VLM, ColQwen page-image RAG) and two versions of the agent are run on all 184 questions. DocAgent has the best overall accuracy (61.4%, against 59.2% for the best baseline), with a clear lead on single-document questions and a clear deficit on whole-corpus search. A Gradio demo answers alerts and questions across all the manuals, with a fault catalog built from them.
+**Status: in progress. Benchmark of v1/v2 complete (4-week build, Oct–Nov 2026); v3 improvements and demo tests ongoing.** Three baselines (text RAG, direct VLM, ColQwen page-image RAG) and two versions of the agent are run on all 184 questions. DocAgent has the best overall accuracy (61.4%, against 59.2% for the best baseline), with a clear lead on single-document questions and a clear deficit on whole-corpus search. A Gradio demo answers alerts and questions across all the manuals, with a fault catalog built from them.
 
 ## Results (184 questions)
 
@@ -73,6 +73,25 @@ retrieve ──> read ──> answer ──> verify ──> done
 4. **Verify:** the model checks the answer against the notes. If something is missing, it writes a follow-up search and the agent reads more pages once. If no page had anything useful, the answer is "Not answerable", which targets B3's main weakness.
 
 Every answer keeps a trace (pages read, notes, verifier decision) for the demo and for error analysis.
+
+### v3 (in progress, not yet run on GPU)
+
+v2 still trails B3 on multi-page questions (43.8 vs 51.2) and on whole-corpus search (ViDoRe, 61.7 vs 71.7). v3 targets both:
+
+- **Reranker:** a cross-encoder (`BAAI/bge-reranker-v2-m3`) re-scores the top 20 fused pages from their text, reading question and page together. Its order is fused with the original ranking, so a page only the image search found is not dropped.
+- **Neighbouring pages:** when a page gives useful facts, the pages just before and after it are read too (up to 2 per round), since tables and procedures often continue on the next page.
+
+Every part has a switch, so an **ablation** run measures what each one brings:
+
+| Run | Switch |
+|---|---|
+| full v3 | (defaults) |
+| no reranker | `DOCAGENT_RERANK=""` |
+| no neighbouring pages | `DOCAGENT_NEIGHBOURS=0` |
+| no verifier (one pass) | `DOCAGENT_VERIFY=0` |
+| no ColQwen (text retrieval only) | `DOCAGENT_VISUAL_WEIGHT=0` |
+
+Give each ablation its own name in the results, e.g. `DOCAGENT_SYSTEM_NAME=DA_v3_no_rerank`.
 
 ## Systems
 

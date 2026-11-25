@@ -96,7 +96,15 @@ class Demo:
             print("No ColQwen index, text retrieval only:", e, flush=True)
             self.vindex, self.colqwen = None, None
         self.vlm = LockedVLM(VLM(), self.gpu)
-        self.agent = DocAgent(self.store, self.vlm, self.text_index, self.vindex, compare_devices=True)
+        reranker = None
+        if CFG.rerank_model:
+            try:
+                from docagent.retrieve import Reranker
+                reranker = Reranker()
+            except Exception as e:     # optional: the agent works without it
+                print("No reranker:", e, flush=True)
+        self.agent = DocAgent(self.store, self.vlm, self.text_index, self.vindex, compare_devices=True,
+                              reranker=reranker)
         self.catalog = Catalog()
         fixed = self.catalog.reground(self.store)   # rows built before grounding: drop invented causes
         if fixed:

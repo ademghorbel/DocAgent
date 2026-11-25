@@ -164,3 +164,15 @@ def unique_pages(hits: list[Hit]) -> list[tuple[str, int]]:
             seen.add(key)
             out.append(key)
     return out
+
+
+class Reranker:
+    """Cross-encoder that re-scores (question, page text) pairs; reads both together, so it is sharper than
+    the embedding search but too slow for a whole corpus. Used on the top pages of the fused ranking."""
+
+    def __init__(self, model_name: str = CFG.rerank_model, device: str | None = None, max_length: int = 1024):
+        from sentence_transformers import CrossEncoder
+        self.model = CrossEncoder(model_name, device=device, max_length=max_length)
+
+    def scores(self, query: str, texts: list[str]) -> list[float]:
+        return [float(s) for s in self.model.predict([(query, t) for t in texts], batch_size=8)]

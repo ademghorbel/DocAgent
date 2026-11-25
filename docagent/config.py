@@ -30,6 +30,8 @@ class Config:
     chunk_chars: int = 1200
     chunk_overlap: int = 200
     top_k: int = _env("DOCAGENT_TOP_K", 5, int)
+    # Cross-encoder reranker for DocAgent v3 ("" turns it off)
+    rerank_model: str = _env("DOCAGENT_RERANK", "BAAI/bge-reranker-v2-m3")
 
     # VLM, used by every system so the comparison is fair
     vlm_model: str = _env("DOCAGENT_VLM", "Qwen/Qwen2.5-VL-7B-Instruct")

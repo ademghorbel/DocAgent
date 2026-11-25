@@ -22,6 +22,16 @@ page recall@5 0.59 vs 0.64), two changes:
   Notes are per page, so anything that needs two pages side by side was lost;
 - ColQwen counts double in the fusion (VISUAL_WEIGHT), since it is the stronger retriever
   (84% hit rate vs 72% for text) and equal weights pulled recall below B3's.
+
+v2 on 184 questions: 61.4% (B3 59.2), but still behind B3 on multi-page questions (43.8 vs 51.2) and on
+ViDoRe (61.7 vs 71.7). v3 targets those two:
+- a cross-encoder reranker re-scores the top RERANK_DEPTH fused pages from their text (question and page
+  read together), and its order is fused with the original one, so a page only the image search found
+  is not lost;
+- neighbouring pages: when a page has useful facts, the page before and after it are read too (up to
+  NEIGHBOURS extra pages per round). Tables and procedures often continue on the next page.
+Each change has a switch (DOCAGENT_RERANK="", DOCAGENT_NEIGHBOURS=0, DOCAGENT_VERIFY=0,
+DOCAGENT_VISUAL_WEIGHT=0) so an ablation run can measure what each part brings.
 """
 from __future__ import annotations
 
@@ -40,9 +50,13 @@ PAGE_TEXT_CHARS = 2500     # text layer passed alongside each page image
 ANSWER_IMAGES = _env("DOCAGENT_ANSWER_IMAGES", CFG.direct_vlm_pages, int)   # page images at the answer step (B3's budget)
 VISUAL_WEIGHT = _env("DOCAGENT_VISUAL_WEIGHT", 2.0, float)                  # ColQwen's weight in the fusion, text = 1
 RRF_K = 60                 # standard reciprocal-rank-fusion constant
+RERANK_DEPTH = 20          # fused pages re-scored by the cross-encoder
+NEIGHBOURS = _env("DOCAGENT_NEIGHBOURS", 2, int)   # extra adjacent pages read per round (0 = off)
+VERIFY = _env("DOCAGENT_VERIFY", "1") == "1"       # 0 = answer once, no verifier, no second round
 # Name written to predictions.jsonl. A rerun skips (system, question) pairs that already have an
-# answer, so a changed agent needs a new name; the first version's rows stay as "DA_agent".
-SYSTEM_NAME = "DA_agent_v2"
+# answer, so a changed agent needs a new name (v1 rows stay "DA_agent", v2 "DA_agent_v2").
+# Ablation runs set DOCAGENT_SYSTEM_NAME, e.g. "DA_v3_no_rerank".
+SYSTEM_NAME = _env("DOCAGENT_SYSTEM_NAME", "DA_agent_v3")
 
 READ_PROMPT = """Question: {question}
 
@@ -119,7 +133,8 @@ class DocAgent:
     def __init__(self, store: PageStore, vlm, text_index=None, visual_index=None,
                  pages_per_round: int = PAGES_PER_ROUND, max_rounds: int = MAX_ROUNDS, depth: int = 20,
                  answer_images: int = ANSWER_IMAGES, visual_weight: float = VISUAL_WEIGHT,
-                 compare_devices: bool = False):
+                 compare_devices: bool = False, reranker=None, neighbours: int = NEIGHBOURS,
+                 verify: bool = VERIFY):
         if text_index is None and visual_index is None:
             raise ValueError("DocAgent needs at least one retriever")
         self.store, self.vlm = store, vlm
@@ -127,6 +142,7 @@ class DocAgent:
         self.pages_per_round, self.max_rounds, self.depth = pages_per_round, max_rounds, depth
         self.answer_images, self.visual_weight = answer_images, visual_weight
         self.compare_devices = compare_devices
+        self.reranker, self.neighbours, self.verify_on = reranker, neighbours, verify
         self.graph = self._build_graph()
 
     # ---------- helpers ----------
@@ -144,6 +160,26 @@ class DocAgent:
         from .retrieve import unique_pages
         return unique_pages(self.text_index.search(query, k=self.depth * 3, doc_ids=doc_ids or None))[: self.depth]
 
+    def _rerank(self, question: str, ranking: list[tuple[str, int]]) -> list[tuple[str, int]]:
+        """Fuse the ranking with the cross-encoder's order of its top pages (pages without text keep
+        their place through the original ranking)."""
+        top = [k for k in ranking[:RERANK_DEPTH] if (p := self.store.get(*k)) and (p.text or "").strip()]
+        if self.reranker is None or len(top) < 2:
+            return ranking
+        scores = self.reranker.scores(question, [self.store.get(*k).text[:PAGE_TEXT_CHARS] for k in top])
+        reranked = [k for _, k in sorted(zip(scores, top), key=lambda x: -x[0])]
+        return rrf([ranking, reranked])
+
+    def _neighbours(self, state: AgentState, keys) -> list[tuple[str, int]]:
+        """Unread pages just before / after pages that gave facts, nearest first."""
+        out = []
+        for doc, page in keys:
+            for d in (1, -1):
+                k = (doc, page + d)
+                if k not in state["read"] and k not in out and k not in keys and self.store.get(*k):
+                    out.append(k)
+        return out[: self.neighbours]
+
     def _image(self, key):
         page = self.store.get(*key)
         return Image.open(self.store.image_path(page)) if page else None
@@ -153,13 +189,14 @@ class DocAgent:
         q = state["question"]
         if state.get("round", 0) == 0:
             rankings, weights = [], []
-            if self.visual_index is not None and q.qid in self.visual_index.queries:
+            if self.visual_index is not None and self.visual_weight > 0 and q.qid in self.visual_index.queries:
                 rankings.append([key for key, _ in self.visual_index.search(q.qid, k=self.depth, doc_ids=q.doc_ids)])
                 weights.append(self.visual_weight)
             rankings.append(self._text_pages(q.question, q.doc_ids))
             weights.append(1.0)
             first = [k for k in state.get("first_pages") or [] if self.store.get(*k)]
-            state["ranking"] = first + [k for k in rrf(rankings, weights) if k not in first]
+            fused = self._rerank(q.question, rrf(rankings, weights))
+            state["ranking"] = first + [k for k in fused if k not in first]
             state.update(read=[], notes={}, trace=[])
         else:
             # Round 2: pages found by the verifier's follow-up query come first, then the rest of the ranking.
@@ -172,8 +209,18 @@ class DocAgent:
         return state
 
     def read(self, state: AgentState) -> AgentState:
+        batch = state.pop("batch", [])
+        self._read_pages(state, batch)
+        if self.neighbours:
+            extra = self._neighbours(state, [k for k in batch if k in state["notes"]])
+            if extra:
+                state["trace"].append(f"next to pages with facts: reading {[page_label(*k) for k in extra]}")
+                self._read_pages(state, extra)
+        return state
+
+    def _read_pages(self, state: AgentState, keys) -> None:
         q = state["question"]
-        for key in state.pop("batch", []):
+        for key in keys:
             page = self.store.get(*key)
             text = (page.text or "").strip()[:PAGE_TEXT_CHARS]
             prompt = (f"Text layer of this page:\n{text}\n\n" if text else "") + READ_PROMPT.format(
@@ -184,7 +231,6 @@ class DocAgent:
             if not _is_none(note):
                 state["notes"][key] = note.strip()
             state["trace"].append(f"read {page_label(*key)}: {'NONE' if _is_none(note) else note.strip()[:80]}")
-        return state
 
     def answer(self, state: AgentState) -> AgentState:
         q = state["question"]
@@ -219,6 +265,9 @@ class DocAgent:
         return state
 
     def verify(self, state: AgentState) -> AgentState:
+        if not self.verify_on:          # ablation: one pass, no check, no second round
+            state["verdict"] = state.get("verdict") or "unverified"
+            return state
         if state.get("verdict") == "no_evidence" and state["round"] < self.max_rounds:
             state["follow_up"] = state["question"].question
             state["verdict"] = "missing"

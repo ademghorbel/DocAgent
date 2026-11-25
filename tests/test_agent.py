@@ -72,7 +72,8 @@ def test_answer_step_halves_images_when_out_of_memory(store):  # noqa: F811
 
     vlm = TightVLM({"[pump_A.pdf p.2]": "E-47: discharge pressure too high"},
                    answer="Answer: Discharge pressure too high\nPages: [pump_A.pdf p.2]")
-    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), visual_index(store, 1), pages_per_round=3)
+    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), visual_index(store, 1), pages_per_round=3,
+                     neighbours=0)
     row = run_agent(Q, agent)
     answer_call = next(c for c in vlm.calls if c[0] == "answer")
     assert answer_call[1] == ["[pump_A.pdf p.2]"] and vlm.freed == 1   # 3 images -> 1, noted page kept
@@ -83,7 +84,8 @@ def test_answer_step_halves_images_when_out_of_memory(store):  # noqa: F811
 def test_agent_reads_pages_one_by_one_and_answers(store):  # noqa: F811
     vlm = ScriptedVLM({"[pump_A.pdf p.2]": "E-47: discharge pressure too high"},
                       answer="Answer: Discharge pressure too high\nPages: [pump_A.pdf p.2]")
-    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), visual_index(store, 1), pages_per_round=3)
+    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), visual_index(store, 1), pages_per_round=3,
+                     neighbours=0)
     row = score_row(run_agent(Q, agent), Q, "rule", vlm)
     reads = [c for c in vlm.calls if c[0] == "read"]
     assert len(reads) == 3 and all(len(labels) == 1 for _, labels in reads)   # one page per call
@@ -92,7 +94,7 @@ def test_agent_reads_pages_one_by_one_and_answers(store):  # noqa: F811
     answer_call = next(c for c in vlm.calls if c[0] == "answer")
     # the page with useful notes comes first, then the other pages read, all shown together
     assert answer_call[1][0] == "[pump_A.pdf p.2]" and len(answer_call[1]) == 3
-    assert row["system"] == "DA_agent_v2" and any("verify: supported" in t for t in row["trace"])
+    assert row["system"] == "DA_agent_v3" and any("verify: supported" in t for t in row["trace"])
 
 
 def test_agent_says_not_answerable_when_no_page_helps(store):  # noqa: F811
@@ -108,7 +110,7 @@ def test_verifier_triggers_a_second_round(store):  # noqa: F811
     vlm = ScriptedVLM({"[pump_A.pdf p.1]": "pump P-12", "[pump_A.pdf p.2]": "E-47: discharge pressure too high"},
                       answer="Answer: Discharge pressure too high\nPages: [pump_A.pdf p.2]",
                       verify=("MISSING: error E-47 troubleshooting table", "SUPPORTED"))
-    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), visual_index(store, 0), pages_per_round=1)
+    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), visual_index(store, 0), pages_per_round=1, neighbours=0)
     row = run_agent(Q, agent)
     assert row["rounds"] == 2 and row["pages_used"] == 2
     assert [c[0] for c in vlm.calls] == ["read", "answer", "verify", "read", "answer", "verify"]
@@ -149,3 +151,34 @@ def test_reader_replies_that_say_nothing_are_not_notes():
     assert not _is_none("TMP117: ±0.2 °C from -40 to 100 °C")
     assert not _is_none("The page does not mention 100 °C, but gives ±0.15 °C from -40 to 70 °C.")
     assert _is_none("This page does not mention the TMP117.")
+
+
+def test_neighbouring_pages_of_a_page_with_facts_are_read(store):  # noqa: F811
+    vlm = ScriptedVLM({"[pump_A.pdf p.2]": "E-47: discharge pressure too high"})
+    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), visual_index(store, 1), pages_per_round=1,
+                     neighbours=2)
+    row = run_agent(Q, agent)
+    reads = [c[1][0] for c in vlm.calls if c[0] == "read"]
+    assert reads[:3] == ["[pump_A.pdf p.2]", "[pump_A.pdf p.3]", "[pump_A.pdf p.1]"]   # after, then before
+    assert any("next to pages with facts" in t for t in row["trace"])
+
+
+def test_reranker_order_is_fused_with_the_ranking(store):  # noqa: F811
+    class Fake:
+        def scores(self, query, texts):   # prefers whatever page mentions "Rated current"
+            return [1.0 if "Rated current" in t else 0.0 for t in texts]
+
+    agent = DocAgent(store, ScriptedVLM({}), TextIndex.build(store, HashEmbedder()), None, reranker=Fake())
+    ranking = [p.key for p in store.pages if (p.text or "").strip()]
+    target = next(p.key for p in store.pages if "Rated current" in (p.text or ""))
+    fused = agent._rerank("rated current?", [k for k in ranking if k != target] + [target])
+    assert fused.index(target) < len(ranking) - 1 and set(fused) == set(ranking)
+    assert DocAgent(store, ScriptedVLM({}), TextIndex.build(store, HashEmbedder()), None)._rerank("q", ranking)         == ranking                                              # no reranker: unchanged
+
+
+def test_verifier_off_answers_in_one_pass(store):  # noqa: F811
+    vlm = ScriptedVLM({"[pump_A.pdf p.2]": "E-47: discharge pressure too high"}, verify=("MISSING: more",))
+    agent = DocAgent(store, vlm, TextIndex.build(store, HashEmbedder()), visual_index(store, 1), pages_per_round=1,
+                     neighbours=0, verify=False)
+    row = run_agent(Q, agent)
+    assert row["rounds"] == 1 and "verify" not in [c[0] for c in vlm.calls] and row["verdict"] == "unverified"

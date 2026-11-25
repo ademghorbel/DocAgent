@@ -67,8 +67,13 @@ def main():
     done = {(r["system"], r["qid"]) for r in read_jsonl(pred_path)} if pred_path.exists() else set()
 
     from docagent.baselines import run_b1, run_b2, run_b3
+    da_name, reranker = "DA_agent_v3", None
     if "DA" in args.systems:
-        from docagent.agent import DocAgent, run_agent
+        from docagent.agent import SYSTEM_NAME as da_name, DocAgent, run_agent
+        if CFG.rerank_model:
+            from docagent.retrieve import Reranker
+            print(f"Loading the reranker {CFG.rerank_model}...", flush=True)
+            reranker = Reranker()
     from docagent.retrieve import BGEEmbedder, TextIndex
     from docagent.visual import VisualIndex
     from docagent.vlm import VLM
@@ -90,7 +95,7 @@ def main():
         for i, q in enumerate(questions, 1):
             store = stores.setdefault(q.collection, PageStore(CFG.pages_dir, q.collection))
             for sysname in args.systems:
-                full = {"B1": "B1_text_rag", "B2": "B2_direct_vlm", "B3": "B3_colqwen_rag", "DA": "DA_agent_v2"}[sysname]
+                full = {"B1": "B1_text_rag", "B2": "B2_direct_vlm", "B3": "B3_colqwen_rag", "DA": da_name}[sysname]
                 if (full, q.qid) in done:
                     continue
                 if sysname in ("B1", "DA") and q.collection not in indexes:
@@ -107,7 +112,8 @@ def main():
                         vindexes[q.collection] = None
                 if sysname == "DA":
                     if q.collection not in agents:
-                        agents[q.collection] = DocAgent(store, vlm, indexes[q.collection], vindexes[q.collection])
+                        agents[q.collection] = DocAgent(store, vlm, indexes[q.collection], vindexes[q.collection],
+                                                         reranker=reranker)
                     row = run_agent(q, agents[q.collection])
                 elif sysname == "B1":
                     row = run_b1(q, indexes[q.collection], vlm)
