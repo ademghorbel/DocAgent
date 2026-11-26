@@ -213,7 +213,7 @@ class Demo:
                                   max_new_tokens=30).text
         by_code = {x.code.upper(): x for x in rows}
         picked = [by_code[c.strip().upper()] for c in re.split(r"[,\s]+", reply) if c.strip().upper() in by_code]
-        return list(dict.fromkeys(picked))[:3]
+        return list({x.key: x for x in picked}.values())[:3]   # Fault is not hashable
 
     @staticmethod
     def _needs_pages(text: str, hits: list[Fault]) -> bool:

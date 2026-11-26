@@ -146,3 +146,20 @@ def test_figure_numbers_are_not_codes_and_mixed_case_codes_match_in_capitals(tmp
     codes = lambda q: [f.code for f in cat.find_codes(q)]  # noqa: E731
     assert codes("drive shows PHF") == ["phf"] and codes("ASF on the display") == ["AsF"]
     assert codes("the asf thing") == []      # lowercase word: not trusted
+
+
+def test_demo_likely_faults_dedupes_unhashable_faults():
+    """The symptom path crashed on Kaggle: dict.fromkeys on Fault (an unhashable dataclass)."""
+    import importlib.util
+    from types import SimpleNamespace
+    from pathlib import Path
+    from docagent.catalog import Fault
+    spec = importlib.util.spec_from_file_location("demo_app", Path(__file__).parents[1] / "demo" / "app.py")
+    app = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(app)
+    rows = [Fault("Schneider ATV320", "atv.pdf", "OCF", "Overcurrent", "too fast ramp", pages=[410]),
+            Fault("Schneider ATV320", "atv.pdf", "OBF", "Overbraking", "braking too strong", pages=[411])]
+    fake = SimpleNamespace(catalog=SimpleNamespace(faults=rows),
+                           vlm=SimpleNamespace(generate=lambda *a, **k: SimpleNamespace(text="OCF, ocf OBF")))
+    got = app.Demo._likely_faults(fake, "The drive trips when the motor accelerates", ["atv.pdf"])
+    assert [x.code for x in got] == ["OCF", "OBF"]
